@@ -11,6 +11,8 @@ const { normalizeErrorResponse, errorHandler } = require('./middleware/errorHand
 const { startLedgerMonitor, getLedgerStreamHealth } = require('./services/ledgerMonitor');
 const { sendAlert } = require('./services/alerting');
 const { assertNoLegacyPlaintextUserWalletSecrets } = require('./services/walletSecrets');
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
 
 const app = express();
 
@@ -23,7 +25,30 @@ app.use(cookieParser());
 app.use(requestIdMiddleware);
 app.use(normalizeErrorResponse);
 
+const openApiSpec = swaggerJsdoc({
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'CrowdPay API',
+      version: '1.0.0',
+    },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+  },
+  apis: ['./src/routes/*.js'],
+});
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
+
 app.use('/api/auth', require('./routes/auth'));
+// Backwards/alternate compatibility for docs + clients expecting /api/users/register|login.
+app.use('/api/users', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/anchor', require('./routes/anchor'));

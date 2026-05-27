@@ -23,6 +23,13 @@ const { withDecryptedWalletSecret } = require('../services/walletSecrets');
 
 const ALLOWED_CAMPAIGN_STATUS_FOR_REQUEST = ['active', 'funded'];
 
+/**
+ * @openapi
+ * tags:
+ *   - name: Withdrawals
+ *     description: Withdrawal requests and audit timeline
+ */
+
 function hasSigner(signers, publicKey) {
   return signers.some((s) => s.key === publicKey && s.weight >= 1);
 }
@@ -72,6 +79,35 @@ router.get('/capabilities', requireAuth, (req, res) => {
 });
 
 router.post('/request', requireAuth, withdrawalValidation, validateRequest, async (req, res) => {
+  /**
+   * @openapi
+   * /api/withdrawals/request:
+   *   post:
+   *     tags: [Withdrawals]
+   *     summary: Create a pending withdrawal request
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [campaign_id, destination_key, amount]
+   *             properties:
+   *               campaign_id: { type: string }
+   *               destination_key: { type: string }
+   *               amount: { type: string }
+   *     responses:
+   *       201:
+   *         description: Created
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden
+   *       404:
+   *         description: Campaign not found
+   */
   const { campaign_id, destination_key, amount } = req.body;
 
   const { rows: campaigns } = await db.query(
@@ -270,7 +306,28 @@ router.post('/:id/approve/creator', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/:id/approve/platform', requireAuth, requireRole('admin'), async (req, res) => {
+const platformApproveHandler = async (req, res) => {
+  /**
+   * @openapi
+   * /api/withdrawals/{id}/approve:
+   *   post:
+   *     tags: [Withdrawals]
+   *     summary: Platform approval (alias of /approve/platform)
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: OK
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden
+   */
   const { rows: requests } = await db.query(
     `SELECT wr.*, c.status AS campaign_status
      FROM withdrawal_requests wr
@@ -412,7 +469,11 @@ router.post('/:id/approve/platform', requireAuth, requireRole('admin'), async (r
   } finally {
     client.release();
   }
-});
+};
+
+router.post('/:id/approve/platform', requireAuth, requireRole('admin'), platformApproveHandler);
+// Alias for docs + issue acceptance criteria
+router.post('/:id/approve', requireAuth, requireRole('admin'), platformApproveHandler);
 
 router.post('/:id/cancel', requireAuth, async (req, res) => {
   const reason = (req.body && req.body.reason) || 'Cancelled by creator';
@@ -473,6 +534,35 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
 });
 
 router.post('/:id/reject', requireAuth, requireRole('admin'), async (req, res) => {
+  /**
+   * @openapi
+   * /api/withdrawals/{id}/reject:
+   *   post:
+   *     tags: [Withdrawals]
+   *     summary: Platform rejection
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema: { type: string }
+   *     requestBody:
+   *       required: false
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               reason: { type: string }
+   *     responses:
+   *       200:
+   *         description: OK
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden
+   */
   const reason = (req.body && req.body.reason) || 'Rejected by platform';
 
   const { rows: requests } = await db.query(
@@ -552,7 +642,30 @@ router.get('/campaign/:campaignId', requireAuth, async (req, res) => {
   res.json(rows);
 });
 
-router.get('/:id/events', requireAuth, async (req, res) => {
+const withdrawalAuditHandler = async (req, res) => {
+  /**
+   * @openapi
+   * /api/withdrawals/{id}/audit:
+   *   get:
+   *     tags: [Withdrawals]
+   *     summary: Withdrawal audit timeline (alias of /events)
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: OK
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden
+   *       404:
+   *         description: Not found
+   */
   const { rows: wr } = await db.query(
     `SELECT wr.campaign_id FROM withdrawal_requests wr WHERE wr.id = $1`,
     [req.params.id]
@@ -570,6 +683,10 @@ router.get('/:id/events', requireAuth, async (req, res) => {
     [req.params.id]
   );
   res.json(rows);
-});
+};
+
+router.get('/:id/events', requireAuth, withdrawalAuditHandler);
+// Alias for docs + issue acceptance criteria
+router.get('/:id/audit', requireAuth, withdrawalAuditHandler);
 
 module.exports = router;

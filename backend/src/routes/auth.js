@@ -17,6 +17,13 @@ const {
   validateRequest,
 } = require('../middleware/validation');
 
+/**
+ * @openapi
+ * tags:
+ *   - name: Users
+ *     description: User registration and login
+ */
+
 const REFRESH_TOKEN_COOKIE_NAME = 'cp_refresh_token';
 const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 
@@ -111,6 +118,73 @@ async function rotateRefreshToken(oldToken, userId) {
 }
 
 router.post('/register', authLimiter, registerValidation, validateRequest, async (req, res) => {
+  /**
+   * @openapi
+   * /api/auth/register:
+   *   post:
+   *     tags: [Users]
+   *     summary: Register a new user
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [email, password, name]
+   *             properties:
+   *               email: { type: string, format: email }
+   *               password: { type: string, minLength: 6 }
+   *               name: { type: string }
+   *               role: { type: string, enum: [contributor, creator] }
+   *     responses:
+   *       201:
+   *         description: Created
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               required: [token, user]
+   *               properties:
+   *                 token: { type: string }
+   *                 user:
+   *                   type: object
+   *                   properties:
+   *                     id: { type: integer }
+   *                     email: { type: string, format: email }
+   *                     name: { type: string }
+   *                     wallet_public_key: { type: string }
+   *                     role: { type: string }
+   *                     kyc_status: { type: string }
+   *                     kyc_completed_at: { type: string, nullable: true }
+   *                     kyc_required_for_campaigns: { type: boolean }
+   *       409:
+   *         description: Email already registered
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error: { type: string }
+   * /api/users/register:
+   *   post:
+   *     tags: [Users]
+   *     summary: Register a new user (alias of /api/auth/register)
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [email, password, name]
+   *             properties:
+   *               email: { type: string, format: email }
+   *               password: { type: string, minLength: 6 }
+   *               name: { type: string }
+   *               role: { type: string, enum: [contributor, creator] }
+   *     responses:
+   *       201: { description: Created }
+   *       409: { description: Email already registered }
+   */
   const { email, password, name, role } = req.body;
   const normalizedEmail = String(email || '').trim().toLowerCase();
   const normalizedName = String(name || '').trim();
@@ -167,6 +241,69 @@ router.post('/register', authLimiter, registerValidation, validateRequest, async
 });
 
 router.post('/login', authLimiter, loginValidation, validateRequest, async (req, res) => {
+  /**
+   * @openapi
+   * /api/auth/login:
+   *   post:
+   *     tags: [Users]
+   *     summary: Login
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [email, password]
+   *             properties:
+   *               email: { type: string, format: email }
+   *               password: { type: string }
+   *     responses:
+   *       200:
+   *         description: OK
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               required: [token, user]
+   *               properties:
+   *                 token: { type: string }
+   *                 user:
+   *                   type: object
+   *                   properties:
+   *                     id: { type: integer }
+   *                     email: { type: string, format: email }
+   *                     name: { type: string }
+   *                     wallet_public_key: { type: string }
+   *                     role: { type: string }
+   *                     kyc_status: { type: string }
+   *                     kyc_completed_at: { type: string, nullable: true }
+   *                     kyc_required_for_campaigns: { type: boolean }
+   *       401:
+   *         description: Invalid credentials
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error: { type: string }
+   * /api/users/login:
+   *   post:
+   *     tags: [Users]
+   *     summary: Login (alias of /api/auth/login)
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [email, password]
+   *             properties:
+   *               email: { type: string, format: email }
+   *               password: { type: string }
+   *     responses:
+   *       200: { description: OK }
+   *       401: { description: Invalid credentials }
+   */
   const { email, password } = req.body;
   const normalizedEmail = String(email || '').trim().toLowerCase();
   const { rows } = await db.query('SELECT * FROM users WHERE LOWER(email) = $1', [normalizedEmail]);

@@ -24,6 +24,13 @@ const {
 
 const crypto = require('crypto');
 
+/**
+ * @openapi
+ * tags:
+ *   - name: Campaigns
+ *     description: Campaign discovery and management
+ */
+
 const requireCampaignMember = (...allowedRoles) => {
   return async (req, res, next) => {
     const campaignId = req.params.id || req.params.campaign_id || req.body.campaign_id;
@@ -133,6 +140,47 @@ async function logWithdrawalEvent(client, { withdrawalRequestId, actorUserId, ac
 
 // List campaigns with optional search, filtering, sorting, and pagination
 router.get('/', getCampaignsValidation, validateRequest, async (req, res) => {
+  /**
+   * @openapi
+   * /api/campaigns:
+   *   get:
+   *     tags: [Campaigns]
+   *     summary: List campaigns
+   *     parameters:
+   *       - in: query
+   *         name: status
+   *         schema: { type: string }
+   *       - in: query
+   *         name: asset
+   *         schema: { type: string }
+   *       - in: query
+   *         name: search
+   *         schema: { type: string }
+   *       - in: query
+   *         name: sort
+   *         schema: { type: string }
+   *       - in: query
+   *         name: limit
+   *         schema: { type: integer, minimum: 1, maximum: 50 }
+   *       - in: query
+   *         name: offset
+   *         schema: { type: integer, minimum: 0 }
+   *     responses:
+   *       200:
+   *         description: OK
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 total: { type: integer }
+   *                 limit: { type: integer }
+   *                 offset: { type: integer }
+   *                 campaigns:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   */
   const { search, status, asset, sort = 'newest' } = req.query;
   const limit = Number(req.query.limit || 20);
   const offset = Number(req.query.offset || 0);
@@ -168,36 +216,42 @@ router.get('/', getCampaignsValidation, validateRequest, async (req, res) => {
   const orderBy = sortExpressions[sort] || sortExpressions.newest;
 
   const query = `
-    SELECT campaigns.id, title, description, target_amount, raised_amount, asset_type,
-           wallet_public_key, status, creator_id, deadline, cover_image_url, campaigns.created_at,
+    SELECT c.*,
            u.name AS creator_name,
            u.kyc_status AS creator_kyc_status,
-           (SELECT COUNT(*)::int FROM campaign_updates cu WHERE cu.campaign_id = campaigns.id) AS updates_count
-    FROM campaigns
-    JOIN users u ON u.id = campaigns.creator_id
-    SELECT c.*, 
-           (SELECT COUNT(*)::int FROM campaign_updates u WHERE u.campaign_id = c.id) AS updates_count,
+           (SELECT COUNT(*)::int FROM campaign_updates cu WHERE cu.campaign_id = c.id) AS updates_count,
            (SELECT COUNT(DISTINCT sender_public_key)::int FROM contributions con WHERE con.campaign_id = c.id) AS contributor_count
     FROM campaigns c
+    JOIN users u ON u.id = c.creator_id
     ${whereClause}
     ORDER BY ${orderBy}
     LIMIT $${params.length + 1}
     OFFSET $${params.length + 2}
   `;
-  const rows = await db.query(query, [...params, limit, offset]);
+  const result = await db.query(query, [...params, limit, offset]);
 
-  res.json({ total, limit, offset, campaigns: rows.rows });
+  res.json({ total, limit, offset, campaigns: result.rows });
 });
 
 // Get single Campaign
 router.get('/:id', async (req, res) => {
-  const { rows } = await db.query(
-    `SELECT c.*, u.name AS creator_name, u.kyc_status AS creator_kyc_status
-     FROM campaigns c
-     JOIN users u ON u.id = c.creator_id
-     WHERE c.id = $1`,
-    [req.params.id]
-  );
+  /**
+   * @openapi
+   * /api/campaigns/{id}:
+   *   get:
+   *     tags: [Campaigns]
+   *     summary: Get campaign by id
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: OK
+   *       404:
+   *         description: Not found
+   */
   const query = `
     SELECT *,
            (SELECT COUNT(DISTINCT sender_public_key)::int FROM contributions WHERE campaign_id = $1) AS contributor_count
@@ -274,6 +328,8 @@ router.get('/:id/embed', async (req, res) => {
     progress_percentage: Math.round(pct * 10) / 10,
     contribution_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${campaign.id}`,
   });
+});
+
 // Get backers for a campaign
 router.get('/:id/backers', async (req, res) => {
   const campaignId = req.params.id;
@@ -328,6 +384,32 @@ router.get('/:id/stream', async (req, res) => {
 
 // Get live on-chain balance for a campaign
 router.get('/:id/balance', async (req, res) => {
+  /**
+   * @openapi
+   * /api/campaigns/{id}/balance:
+   *   get:
+   *     tags: [Campaigns]
+   *     summary: Get live on-chain balance for a campaign wallet
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: OK
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 type: object
+   *                 properties:
+   *                   asset_type: { type: string }
+   *                   balance: { type: string }
+   *       404:
+   *         description: Campaign not found
+   */
   const { rows } = await db.query(
     'SELECT wallet_public_key FROM campaigns WHERE id = $1',
     [req.params.id]
@@ -456,6 +538,38 @@ router.post('/:id/trigger-refunds', requireAuth, requireRole('admin'), async (re
 
 // Create campaign (authenticated)
 router.post('/', requireAuth, requireRole('creator', 'admin'), async (req, res) => {
+  /**
+   * @openapi
+   * /api/campaigns:
+   *   post:
+   *     tags: [Campaigns]
+   *     summary: Create campaign
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [title, target_amount, asset_type]
+   *             properties:
+   *               title: { type: string }
+   *               description: { type: string, nullable: true }
+   *               target_amount: { type: string }
+   *               asset_type: { type: string }
+   *               deadline: { type: string, nullable: true }
+   *               milestones: { type: array, items: { type: object }, nullable: true }
+   *               min_contribution: { type: string, nullable: true }
+   *               max_contribution: { type: string, nullable: true }
+   *     responses:
+   *       201:
+   *         description: Created
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden
+   */
   const { title, description, target_amount, asset_type, deadline, milestones, min_contribution, max_contribution } = req.body;
   if (!title || !target_amount || !asset_type) {
     return res.status(400).json({ error: 'title, target_amount and asset_type are required' });

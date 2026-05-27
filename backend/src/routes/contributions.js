@@ -26,6 +26,13 @@ const {
 const SUPPORTED_ASSETS = getSupportedAssetCodes();
 const PREPARED_CONTRIBUTION_EXPIRES_IN = '10m';
 
+/**
+ * @openapi
+ * tags:
+ *   - name: Contributions
+ *     description: Contribution creation and quoting
+ */
+
 function validateFreighterPublicKey(publicKey) {
   try {
     Keypair.fromPublicKey(publicKey);
@@ -115,6 +122,49 @@ router.get('/campaign/:campaignId', async (req, res) => {
   res.json(rows);
 });
 
+// List contributions for the authenticated user (alias for /api/users/me/contributions)
+router.get('/', requireAuth, async (req, res) => {
+  /**
+   * @openapi
+   * /api/contributions:
+   *   get:
+   *     tags: [Contributions]
+   *     summary: List contributions for the current user
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: OK
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 type: object
+   *       401:
+   *         description: Unauthorized
+   */
+  const { rows: userRows } = await db.query(
+    'SELECT wallet_public_key FROM users WHERE id = $1',
+    [req.user.userId]
+  );
+  if (!userRows.length) return res.status(404).json({ error: 'User not found' });
+
+  const senderPublicKey = userRows[0].wallet_public_key;
+  const { rows } = await db.query(
+    `SELECT ctr.id, ctr.amount, ctr.asset, ctr.anchor_id, ctr.anchor_transaction_id,
+            ctr.tx_hash, ctr.created_at,
+            c.id AS campaign_id, c.title AS campaign_title, c.status AS campaign_status,
+            c.target_amount, c.raised_amount
+     FROM contributions ctr
+     JOIN campaigns c ON c.id = ctr.campaign_id
+     WHERE ctr.sender_public_key = $1
+     ORDER BY ctr.created_at DESC`,
+    [senderPublicKey]
+  );
+  res.json(rows);
+});
+
 // Trace contribution settlement by Stellar tx hash (submitted vs indexed on ledger)
 router.get('/finalization/:txHash', requireAuth, async (req, res) => {
   const txHash = req.params.txHash;
@@ -172,6 +222,49 @@ router.get('/finalization/:txHash', requireAuth, async (req, res) => {
 
 // Quote conversion before a path payment contribution
 router.get('/quote', requireAuth, async (req, res) => {
+  /**
+   * @openapi
+   * /api/contributions/quote:
+   *   get:
+   *     tags: [Contributions]
+   *     summary: Get a DEX quote before submitting a conversion contribution
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: send_asset
+   *         required: true
+   *         schema: { type: string }
+   *       - in: query
+   *         name: dest_asset
+   *         required: true
+   *         schema: { type: string }
+   *       - in: query
+   *         name: dest_amount
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: OK
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               required: [send_asset, dest_asset, dest_amount, quoted_source_amount, max_send_amount, estimated_rate, path, path_count]
+   *               properties:
+   *                 send_asset: { type: string }
+   *                 dest_asset: { type: string }
+   *                 dest_amount: { type: string }
+   *                 quoted_source_amount: { type: string }
+   *                 max_send_amount: { type: string }
+   *                 estimated_rate: { type: string }
+   *                 path: { type: array, items: { type: string } }
+   *                 path_count: { type: integer }
+   *       400:
+   *         description: Missing/invalid query params
+   *       404:
+   *         description: No path found
+   */
   const { send_asset, dest_asset, dest_amount } = req.query;
   if (!send_asset || !dest_asset || !dest_amount) {
     return res.status(400).json({
@@ -314,42 +407,12 @@ router.post('/submit-signed', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'signed_xdr and prepare_token are required' });
   }
 
-  let txHash;
-  let conversionQuote = null;
-  let unsignedXdr;
-  let signedXdr;
-  let flowMetadata;
-  let platformFeeAmount = 0;
-
-  if (send_asset === campaign.asset_type) {
-    const prepared = await prepareSignedContributionPayment({
-      senderSecret,
-      destinationPublicKey: campaign.wallet_public_key,
-      asset: send_asset,
-      amount,
-      memo: `cp-${campaign_id}`,
-    });
-    unsignedXdr = prepared.unsignedXdr;
-    signedXdr = prepared.signedXdr;
-    platformFeeAmount = prepared.feeAmount || 0;
-    flowMetadata = {
-      flow: 'payment',
-      send_asset,
-      amount: String(amount),
-      contributor_public_key: contributorPublicKey,
-      platform_fee_amount: platformFeeAmount,
-    };
-  } else {
-    const paths = await getPathPaymentQuote({
-      sendAsset: send_asset,
-      destAsset: campaign.asset_type,
-      destAmount: amount,
-    });
-    if (!paths.length) {
-      return res.status(422).json({
-        error: `No conversion path found for ${send_asset} -> ${campaign.asset_type}`,
-      });
-    }
+  let prepared;
+  try {
+    prepared = verifyPreparedContributionToken(prepare_token);
+  } catch (err) {
+    return res.status(400).json({ error: err.message || 'Invalid prepare_token' });
+  }
 
   if (prepared.user_id !== req.user.userId) {
     return res.status(403).json({ error: 'Prepared contribution token does not belong to this user' });
@@ -361,27 +424,6 @@ router.post('/submit-signed', requireAuth, async (req, res) => {
       unsignedXdr: prepared.unsigned_xdr,
       senderPublicKey: prepared.sender_public_key,
     });
-    unsignedXdr = prepared.unsignedXdr;
-    signedXdr = prepared.signedXdr;
-    platformFeeAmount = prepared.feeAmount || 0;
-
-    conversionQuote = {
-      send_asset,
-      campaign_asset: campaign.asset_type,
-      campaign_amount: String(amount),
-      quoted_source_amount: bestPath.source_amount,
-      max_send_amount: sendMax,
-      path: bestPath.path,
-    };
-    flowMetadata = {
-      flow: 'path_payment_strict_receive',
-      send_asset,
-      dest_asset: campaign.asset_type,
-      dest_amount: String(amount),
-      max_send_amount: sendMax,
-      contributor_public_key: contributorPublicKey,
-      platform_fee_amount: platformFeeAmount,
-    };
   } catch (err) {
     return res.status(422).json({ error: err.message });
   }
@@ -417,13 +459,50 @@ router.post('/submit-signed', requireAuth, async (req, res) => {
     tx_hash: txHash,
     stellar_transaction_id: stellarTransactionId,
     message: 'Transaction submitted',
-    platform_fee_amount: platformFeeAmount,
-    conversion_quote: conversionQuote,
+    conversion_quote: prepared.conversion_quote || null,
   });
 });
 
 // Contribute to a campaign (authenticated, custodial)
 router.post('/', requireAuth, contributionValidation, validateRequest, async (req, res) => {
+  /**
+   * @openapi
+   * /api/contributions:
+   *   post:
+   *     tags: [Contributions]
+   *     summary: Submit a contribution (custodial)
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [campaign_id, amount, send_asset]
+   *             properties:
+   *               campaign_id: { type: string }
+   *               amount: { type: string }
+   *               send_asset: { type: string }
+   *               display_name: { type: string, nullable: true }
+   *     responses:
+   *       202:
+   *         description: Accepted
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               required: [tx_hash, stellar_transaction_id, message, conversion_quote]
+   *               properties:
+   *                 tx_hash: { type: string }
+   *                 stellar_transaction_id: { type: string }
+   *                 message: { type: string }
+   *                 conversion_quote: { type: object, nullable: true }
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Campaign not found
+   */
   const { campaign_id, amount, send_asset, display_name } = req.body;
 
   const campaign = await loadActiveCampaign(campaign_id);

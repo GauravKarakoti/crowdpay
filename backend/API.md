@@ -1,5 +1,9 @@
 # CrowdPay Backend API
 
+## Interactive Swagger UI
+
+In development, browse the interactive API docs at `GET /api/docs`.
+
 ## Contribution conversion model
 
 - Campaigns define a default settlement asset via `campaigns.asset_type` (`USDC` or `XLM`).
