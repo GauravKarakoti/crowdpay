@@ -73,10 +73,64 @@ export default function Campaign() {
         }
       })
       .catch((err) => setLoadError(err.message || 'Could not load campaign.'));
-    api.getCampaignBackers(id).then(setContributions).catch(() => setContributions([]));
+    api.getContributions(id).then(setContributions).catch(() => setContributions([]));
     api.getMilestones(id).then(setMilestones).catch(() => setMilestones([]));
     api.getCampaignUpdates(id, { limit: 20 }).then(setUpdates).catch(() => setUpdates([]));
   }, [id, token, contributed]);
+
+  useEffect(() => {
+    if (!id) return;
+    if (isLive) return;
+    if (!campaign) return;
+
+    const isCampaignClosed = ['funded', 'closed', 'withdrawn', 'failed', 'completed'].includes(campaign.status);
+    if (isCampaignClosed) return;
+
+    let intervalId = null;
+    let aborted = false;
+
+    const refresh = async () => {
+      if (aborted) return;
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const [nextCampaign, nextContributions] = await Promise.all([
+          api.getCampaign(id, token),
+          api.getContributions(id),
+        ]);
+        if (aborted) return;
+        setCampaign(nextCampaign);
+        setContributions(nextContributions);
+      } catch {
+        // ignore transient polling errors
+      }
+    };
+
+    const start = () => {
+      if (intervalId != null) return;
+      refresh();
+      intervalId = window.setInterval(refresh, 15_000);
+    };
+
+    const stop = () => {
+      if (intervalId == null) return;
+      window.clearInterval(intervalId);
+      intervalId = null;
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') start();
+      else stop();
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    onVisibility();
+
+    return () => {
+      aborted = true;
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [id, token, isLive, campaign]);
 
   useEffect(() => {
     if (!window.EventSource) return;
