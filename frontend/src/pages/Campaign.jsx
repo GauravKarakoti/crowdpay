@@ -290,7 +290,7 @@ export default function Campaign() {
         <p className="alert alert--error" role="alert">
           {loadError}
         </p>
-        <Link to="/" style={{ color: "#7c3aed", fontWeight: 600 }}>
+        <Link to="/" style={{ color: "var(--color-accent)", fontWeight: 600 }}>
           ← Back home
         </Link>
       </main>
@@ -346,7 +346,7 @@ export default function Campaign() {
             style={{
               marginLeft: "0.5rem",
               background: "transparent",
-              color: "#065f46",
+              color: "var(--color-success-text)",
               textDecoration: "underline",
               fontWeight: 600,
               padding: 0,
@@ -449,13 +449,13 @@ export default function Campaign() {
           <div
             style={{
               fontSize: "0.85rem",
-              color: "#555",
+              color: "var(--color-text-secondary)",
               marginBottom: "1rem",
-              background: "#f9fafb",
+              background: "var(--color-surface)",
               padding: "0.6rem",
               borderRadius: "6px",
               textAlign: "center",
-              border: "1px solid #eee",
+              border: "1px solid var(--color-border-lighter)",
             }}
           >
             {campaign.min_contribution &&
@@ -477,18 +477,18 @@ export default function Campaign() {
               Contribute
             </button>
           ) : (
-            <p style={{ color: "#555", fontSize: "0.9rem", lineHeight: 1.5 }}>
+            <p style={{ color: "var(--color-text-secondary)", fontSize: "0.9rem", lineHeight: 1.5 }}>
               <Link
                 to="/login"
                 state={{ from: `/campaigns/${id}` }}
-                style={{ color: "#7c3aed", fontWeight: 600 }}
+                style={{ color: "var(--color-accent)", fontWeight: 600 }}
               >
                 Log in
               </Link>{" "}
               or{" "}
               <Link
                 to="/register"
-                style={{ color: "#7c3aed", fontWeight: 600 }}
+                style={{ color: "var(--color-accent)", fontWeight: 600 }}
               >
                 create an account
               </Link>{" "}
@@ -497,7 +497,7 @@ export default function Campaign() {
             </p>
           )
         ) : (
-          <p style={{ color: "#555", fontSize: "0.9rem", lineHeight: 1.5 }}>
+          <p style={{ color: "var(--color-text-secondary)", fontSize: "0.9rem", lineHeight: 1.5 }}>
             Contributions are closed while this campaign is{" "}
             <strong>{campaign.status}</strong>.
           </p>
@@ -596,8 +596,8 @@ export default function Campaign() {
               justifyContent: "center",
               gap: "0.5rem",
               width: "100%",
-              background: linkCopied ? "#10b981" : undefined,
-              borderColor: linkCopied ? "#10b981" : undefined,
+              background: linkCopied ? "var(--color-success-text)" : undefined,
+              borderColor: linkCopied ? "var(--color-success-text)" : undefined,
               color: linkCopied ? "#fff" : undefined,
               transition: "all 0.2s ease",
             }}
@@ -634,7 +634,7 @@ export default function Campaign() {
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#dc2626",
+                  color: "var(--color-status-error)",
                   fontWeight: 600,
                   fontSize: "0.9rem",
                   cursor: "pointer",
@@ -665,8 +665,8 @@ export default function Campaign() {
               onClick={() => setShowEmbedSection(!showEmbedSection)}
               style={{
                 background: "transparent",
-                color: "#7c3aed",
-                border: "1px solid #7c3aed",
+                color: "var(--color-accent)",
+                border: "1px solid var(--color-accent)",
                 padding: "0.4rem 0.8rem",
                 fontSize: "0.85rem",
                 minHeight: "auto",
@@ -681,7 +681,7 @@ export default function Campaign() {
               <p
                 style={{
                   fontSize: "0.85rem",
-                  color: "#666",
+                  color: "var(--color-text-hint)",
                   marginBottom: "1rem",
                   lineHeight: 1.5,
                 }}
@@ -695,7 +695,7 @@ export default function Campaign() {
                   style={{
                     fontSize: "0.8rem",
                     fontWeight: 600,
-                    color: "#555",
+                    color: "var(--color-text-hint)",
                     display: "block",
                     marginBottom: "0.5rem",
                   }}
@@ -719,7 +719,7 @@ export default function Campaign() {
                       position: "absolute",
                       top: "0.5rem",
                       right: "0.5rem",
-                      background: embedCopied ? "#10b981" : "#7c3aed",
+                      background: embedCopied ? "var(--color-success-text)" : "var(--color-accent)",
                       color: "#fff",
                       padding: "0.4rem 0.8rem",
                       fontSize: "0.8rem",
@@ -736,7 +736,7 @@ export default function Campaign() {
                   style={{
                     fontSize: "0.8rem",
                     fontWeight: 600,
-                    color: "#555",
+                    color: "var(--color-text-hint)",
                     display: "block",
                     marginBottom: "0.5rem",
                   }}
@@ -750,7 +750,7 @@ export default function Campaign() {
                     height="280"
                     frameBorder="0"
                     title="Campaign embed preview"
-                    style={{ border: "1px solid #e5e5e5", borderRadius: "6px" }}
+                    style={{ border: "1px solid var(--color-border-light)", borderRadius: "6px" }}
                   />
                 </div>
               </div>
@@ -803,7 +803,7 @@ export default function Campaign() {
                 <label
                   style={{
                     fontSize: "0.85rem",
-                    color: "#666",
+                    color: "var(--color-text-hint)",
                     display: "block",
                     marginBottom: "0.25rem",
                   }}
@@ -825,7 +825,7 @@ export default function Campaign() {
                 <label
                   style={{
                     fontSize: "0.85rem",
-                    color: "#666",
+                    color: "var(--color-text-hint)",
                     display: "block",
                     marginBottom: "0.25rem",
                   }}
@@ -876,7 +876,7 @@ export default function Campaign() {
               Current Team
             </strong>
             {members.length === 0 ? (
-              <p style={{ color: "#999" }}>No team members yet.</p>
+              <p style={{ color: "var(--color-text-muted)" }}>No team members yet.</p>
             ) : (
               <div style={{ display: "grid", gap: "0.75rem" }}>
                 {members.map((member) => (
@@ -887,7 +887,7 @@ export default function Campaign() {
                       justifyContent: "space-between",
                       alignItems: "center",
                       gap: "1rem",
-                      borderBottom: "1px solid #eee",
+                      borderBottom: "1px solid var(--color-border-lighter)",
                       paddingBottom: "0.5rem",
                     }}
                   >
@@ -896,7 +896,7 @@ export default function Campaign() {
                       {member.user_name && (
                         <span
                           style={{
-                            color: "#666",
+                            color: "var(--color-text-hint)",
                             fontSize: "0.85rem",
                             marginLeft: "0.5rem",
                           }}
@@ -907,7 +907,7 @@ export default function Campaign() {
                       <div
                         style={{
                           fontSize: "0.75rem",
-                          color: member.accepted_at ? "#10b981" : "#f59e0b",
+                          color: member.accepted_at ? "var(--color-success-text)" : "var(--color-warning-text)",
                           fontWeight: 600,
                         }}
                       >
@@ -943,8 +943,8 @@ export default function Campaign() {
                         style={{
                           padding: "0.25rem 0.5rem",
                           fontSize: "0.85rem",
-                          color: "#ef4444",
-                          borderColor: "#ef4444",
+                          color: "var(--color-status-error)",
+                          borderColor: "var(--color-status-error)",
                         }}
                       >
                         Remove
@@ -1002,7 +1002,7 @@ export default function Campaign() {
         </form>
       )}
       {updates.length === 0 ? (
-        <p style={{ color: "#999", marginBottom: "1rem" }}>
+        <p style={{ color: "var(--color-text-muted)", marginBottom: "1rem" }}>
           No updates posted yet.
         </p>
       ) : (
@@ -1020,13 +1020,13 @@ export default function Campaign() {
                 }}
               >
                 <strong>{update.title}</strong>
-                <span style={{ color: "#666", fontSize: "0.85rem" }}>
+                <span style={{ color: "var(--color-text-hint)", fontSize: "0.85rem" }}>
                   {update.author_name} •{" "}
                   {new Date(update.created_at).toLocaleString()}
                 </span>
               </div>
               <div
-                style={{ marginTop: "0.5rem", color: "#333", lineHeight: 1.5 }}
+                style={{ marginTop: "0.5rem", color: "var(--color-text-primary)", lineHeight: 1.5 }}
                 dangerouslySetInnerHTML={{
                   __html: markdownToHtml(update.body),
                 }}
@@ -1051,7 +1051,7 @@ export default function Campaign() {
         <div style={styles.emptyBackers}>
           <p>Be the first to back this!</p>
           <p
-            style={{ fontSize: "0.9rem", color: "#888", marginTop: "0.25rem" }}
+            style={{ fontSize: "0.9rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}
           >
             Every contribution counts towards making this goal a reality.
           </p>
@@ -1166,8 +1166,8 @@ const styles = {
     flexWrap: "wrap",
   },
   asset: {
-    background: "#ede9fe",
-    color: "#7c3aed",
+    background: "var(--color-accent-lightest)",
+    color: "var(--color-accent)",
     fontSize: "0.75rem",
     fontWeight: 700,
     padding: "2px 8px",
@@ -1177,13 +1177,13 @@ const styles = {
     fontSize: "1.8rem",
     fontWeight: 800,
     margin: "0.5rem 0",
-    color: "#111",
+    color: "var(--color-text-primary)",
   },
-  creator: { color: "#666", fontSize: "0.9rem", marginBottom: "0.5rem" },
-  desc: { color: "#555", fontSize: "1rem", lineHeight: 1.6 },
+  creator: { color: "var(--color-text-hint)", fontSize: "0.9rem", marginBottom: "0.5rem" },
+  desc: { color: "var(--color-text-secondary)", fontSize: "1rem", lineHeight: 1.6 },
   card: {
-    background: "#fff",
-    border: "1px solid #e5e5e5",
+    background: "var(--color-bg)",
+    border: "1px solid var(--color-border-light)",
     borderRadius: "10px",
     padding: "1.5rem",
     marginBottom: "1rem",
@@ -1193,19 +1193,19 @@ const styles = {
     justifyContent: "space-between",
     marginBottom: "1rem",
   },
-  big: { fontSize: "1.5rem", fontWeight: 800, color: "#111" },
-  small: { fontSize: "0.85rem", color: "#888" },
+  big: { fontSize: "1.5rem", fontWeight: 800, color: "var(--color-text-primary)" },
+  small: { fontSize: "0.85rem", color: "var(--color-text-secondary)" },
   bar: {
-    background: "#f0f0f0",
+    background: "var(--color-surface)",
     borderRadius: "99px",
     height: "8px",
     marginBottom: "1.25rem",
     overflow: "hidden",
   },
-  fill: { background: "#7c3aed", height: "100%", borderRadius: "99px" },
+  fill: { background: "var(--color-accent)", height: "100%", borderRadius: "99px" },
   cta: { width: "100%", padding: "0.85rem", fontSize: "1rem" },
   walletInfo: {
-    background: "#f8f8f8",
+    background: "var(--color-surface)",
     borderRadius: "8px",
     padding: "0.75rem 1rem",
     marginBottom: "1.75rem",
@@ -1216,10 +1216,10 @@ const styles = {
   walletLabel: {
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#888",
+    color: "var(--color-text-secondary)",
     textTransform: "uppercase",
   },
-  walletKey: { fontSize: "0.8rem", color: "#555", wordBreak: "break-all" },
+  walletKey: { fontSize: "0.8rem", color: "var(--color-text-hint)", wordBreak: "break-all" },
   detailCoverImage: {
     width: "100%",
     borderRadius: "14px",
@@ -1236,18 +1236,18 @@ const styles = {
   row: {
     display: "flex",
     justifyContent: "space-between",
-    background: "#fff",
-    border: "1px solid #eee",
+    background: "var(--color-bg)",
+    border: "1px solid var(--color-border-lighter)",
     borderRadius: "6px",
     padding: "0.6rem 0.85rem",
   },
-  sender: { fontSize: "0.85rem", color: "#555", fontFamily: "monospace" },
+  sender: { fontSize: "0.85rem", color: "var(--color-text-secondary)", fontFamily: "monospace" },
   amount: { fontSize: "0.85rem", fontWeight: 600, flexShrink: 0 },
-  convHint: { fontSize: "0.72rem", color: "#888", marginTop: "0.15rem" },
+  convHint: { fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: "0.15rem" },
   refundTag: {
     marginTop: "0.45rem",
     fontSize: "0.75rem",
-    color: "#7c3aed",
+    color: "var(--color-accent)",
     fontWeight: 700,
   },
   liveIndicator: {
@@ -1257,7 +1257,7 @@ const styles = {
     marginLeft: "0.5rem",
     fontSize: "0.72rem",
     fontWeight: 600,
-    color: "#16a34a",
+    color: "var(--color-success-text)",
     verticalAlign: "middle",
   },
   liveDot: {
@@ -1265,43 +1265,43 @@ const styles = {
     width: "7px",
     height: "7px",
     borderRadius: "50%",
-    background: "#16a34a",
+    background: "var(--color-success-text)",
     animation: "pulse 1.5s ease-in-out infinite",
   },
   embedCode: {
-    background: "#f8f8f8",
-    border: "1px solid #e5e5e5",
+    background: "var(--color-surface)",
+    border: "1px solid var(--color-border-light)",
     borderRadius: "6px",
     padding: "0.75rem",
     fontSize: "0.75rem",
     fontFamily: "monospace",
-    color: "#333",
+    color: "var(--color-text-primary)",
     overflow: "auto",
     whiteSpace: "pre-wrap",
     wordBreak: "break-all",
     paddingRight: "5rem",
   },
   embedPreview: {
-    background: "#fafafa",
-    border: "1px solid #e5e5e5",
+    background: "var(--color-surface)",
+    border: "1px solid var(--color-border-light)",
     borderRadius: "6px",
     padding: "0.75rem",
   },
   emptyBackers: {
     padding: "2.5rem 1rem",
     textAlign: "center",
-    background: "#fcfaff",
-    border: "2px dashed #ede9fe",
+    background: "var(--color-accent-lightest)",
+    border: "2px dashed var(--color-accent-lighter)",
     borderRadius: "12px",
-    color: "#7c3aed",
+    color: "var(--color-accent)",
     fontWeight: 700,
   },
   avatar: {
     width: "36px",
     height: "36px",
     borderRadius: "50%",
-    background: "#ede9fe",
-    color: "#7c3aed",
+    background: "var(--color-accent-lightest)",
+    color: "var(--color-accent)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
