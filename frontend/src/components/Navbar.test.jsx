@@ -16,6 +16,10 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
+vi.mock('../context/ThemeContext', () => ({
+  useTheme: () => ({ dark: false, toggleTheme: vi.fn() }),
+}));
+
 vi.mock('../context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
@@ -70,6 +74,11 @@ describe('Navbar', () => {
       user: { name: 'Alice', role: 'contributor' },
       logout: mockLogout,
     });
+    render(
+      <MemoryRouter>
+        <Navbar />
+      </MemoryRouter>
+    );
     renderNavbar();
     expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument();
   });
