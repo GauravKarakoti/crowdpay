@@ -153,8 +153,28 @@ cd ../frontend && npm install
 ```bash
 cd backend
 cp .env.example .env
-# Edit .env — add your Stellar platform keypair and DB credentials
+# Edit .env — add your Stellar platform keypair, DB credentials, and optional anchor on-ramp config
 ```
+
+To enable SEP-24 anchor deposits, configure the backend anchor signing wallet and a supported anchor:
+
+- `ANCHOR_WALLET_HOME_DOMAIN`
+- `ANCHOR_WALLET_SIGNING_SECRET`
+- `ANCHOR_MONEYGRAM_ENABLED` (default `true`)
+- `ANCHOR_MONEYGRAM_ENV` (`sandbox`, `preview`, or `production`)
+
+For a custom anchor, configure:
+
+- `ANCHOR_CUSTOM_ID`
+- `ANCHOR_CUSTOM_NAME`
+- `ANCHOR_CUSTOM_HOME_DOMAIN`
+- `ANCHOR_CUSTOM_WEB_AUTH_ENDPOINT`
+- `ANCHOR_CUSTOM_SEP24_ENDPOINT`
+- `ANCHOR_CUSTOM_SIGNING_KEY`
+- `ANCHOR_CUSTOM_ASSET_CODE`
+- `ANCHOR_CUSTOM_ASSET_ISSUER`
+- `ANCHOR_CUSTOM_NETWORK` (`testnet` or `mainnet`)
+- `ANCHOR_CUSTOM_RAILS` (comma-separated)
 
 Creator identity verification is enforced by default before campaign launch. For local testnet development, set `KYC_REQUIRED_FOR_CAMPAIGNS=false` in the backend environment; optionally mirror it with `VITE_KYC_REQUIRED_FOR_CAMPAIGNS=false` so the frontend knows before the profile request returns. For Persona-hosted verification, configure `KYC_PROVIDER=persona`, `PERSONA_API_KEY`, `PERSONA_TEMPLATE_ID`, and `APP_BASE_URL`.
 
