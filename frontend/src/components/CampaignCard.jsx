@@ -51,8 +51,15 @@ export default function CampaignCard({ campaign }) {
           <p style={styles.creator}>by {campaign.creator_name}</p>
         )}
         <p style={styles.desc}>{campaign.description?.slice(0, 100)}{campaign.description?.length > 100 ? '…' : ''}</p>
-        <div style={styles.bar}>
-          <div style={{ ...styles.fill, background: fillColor, width: `${pct}%` }} />
+        <div
+          role="progressbar"
+          aria-valuenow={Number(pct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${pct}% of goal funded`}
+          style={styles.bar}
+        >
+          <div style={{ ...styles.fill, width: `${pct}%` }} aria-hidden="true" />
         </div>
         {deadline && (
           <span style={{ ...styles.deadline, background: deadlineColor === '#ef4444' ? '#fee2e2' : '#fef3c7', color: deadlineColor, borderColor: deadlineColor }}>

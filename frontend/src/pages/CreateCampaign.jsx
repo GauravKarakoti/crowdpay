@@ -313,16 +313,12 @@ export default function CreateCampaign() {
             color: 'var(--color-text-hint)',
           }}
         >
-          <li>
-            <span style={{ color: step === 1 ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>1. Goal & asset</span>
+          <li aria-current={step === 1 ? 'step' : undefined}>
+            <span style={{ color: step === 1 ? '#7c3aed' : '#999' }}>1. Goal & asset</span>
           </li>
           <li aria-hidden="true">→</li>
-          <li>
-            <span style={{ color: step === 2 ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>2. Details</span>
-          </li>
-          <li aria-hidden="true">→</li>
-          <li>
-            <span style={{ color: step === 3 ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>3. Milestones & launch</span>
+          <li aria-current={step === 2 ? 'step' : undefined}>
+            <span style={{ color: step === 2 ? '#7c3aed' : '#999' }}>2. Details & launch</span>
           </li>
         </ol>
       </nav>
@@ -358,6 +354,7 @@ export default function CreateCampaign() {
                 onChange={setField('title')}
                 placeholder="e.g. Community garden rebuild"
                 required
+                aria-required="true"
                 autoComplete="off"
               />
             </div>
@@ -376,6 +373,7 @@ export default function CreateCampaign() {
                 onChange={setField('target_amount')}
                 placeholder="0.00"
                 required
+                aria-required="true"
               />
             </div>
 

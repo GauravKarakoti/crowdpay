@@ -647,61 +647,28 @@ export default function Campaign() {
             </div>
           </div>
         </div>
-        <div style={styles.bar}>
-          <div style={{ ...styles.fill, background: progressColor(parseFloat(pct), campaign.status), width: `${pct}%` }} />
+        <div
+          role="progressbar"
+          aria-valuenow={Number(pct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${pct}% of goal raised`}
+          style={styles.bar}
+        >
+          <div style={{ ...styles.fill, width: `${pct}%` }} aria-hidden="true" />
         </div>
 
-        {(campaign.min_contribution || campaign.max_contribution) && (
-          <div
-            style={{
-              fontSize: "0.85rem",
-              color: "var(--color-text-secondary)",
-              marginBottom: "1rem",
-              background: "var(--color-surface)",
-              padding: "0.6rem",
-              borderRadius: "6px",
-              textAlign: "center",
-              border: "1px solid var(--color-border-lighter)",
-            }}
+        {user ? (
+          <button
+            type="button"
+            className="btn-primary"
+            style={styles.cta}
+            ref={contributeBtnRef}
+            aria-label={`Contribute to ${campaign.title}`}
+            onClick={() => setShowModal(true)}
           >
-            {campaign.min_contribution &&
-              `Min: ${Number(campaign.min_contribution).toLocaleString()} ${campaign.asset_type}`}
-            {campaign.min_contribution && campaign.max_contribution && " · "}
-            {campaign.max_contribution &&
-              `Max: ${Number(campaign.max_contribution).toLocaleString()} ${campaign.asset_type} per backer`}
-          </div>
-        )}
-
-        {campaign.status === "active" ? (
-          user ? (
-            <button
-              type="button"
-              className="btn-primary"
-              style={styles.cta}
-              onClick={() => setShowModal(true)}
-            >
-              Contribute
-            </button>
-          ) : (
-            <p style={{ color: "var(--color-text-secondary)", fontSize: "0.9rem", lineHeight: 1.5 }}>
-              <Link
-                to="/login"
-                state={{ from: `/campaigns/${id}` }}
-                style={{ color: "var(--color-accent)", fontWeight: 600 }}
-              >
-                Log in
-              </Link>{" "}
-              or{" "}
-              <Link
-                to="/register"
-                style={{ color: "var(--color-accent)", fontWeight: 600 }}
-              >
-                create an account
-              </Link>{" "}
-              to contribute. You can pay with your CrowdPay custodial wallet or
-              with Freighter when it is installed.
-            </p>
-          )
+            Contribute
+          </button>
         ) : (
           <p style={{ color: "var(--color-text-secondary)", fontSize: "0.9rem", lineHeight: 1.5 }}>
             Contributions are closed while this campaign is{" "}
@@ -1382,7 +1349,10 @@ export default function Campaign() {
       {showModal && (
         <ContributeModal
           campaign={campaign}
-          onClose={() => setShowModal(false)}
+          onClose={() => {
+            setShowModal(false);
+            contributeBtnRef.current?.focus();
+          }}
           onSuccess={() => setContributed((v) => !v)}
         />
       )}
