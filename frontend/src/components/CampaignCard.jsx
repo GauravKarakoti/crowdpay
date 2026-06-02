@@ -5,10 +5,10 @@ import VerificationBadge from './VerificationBadge';
 import CampaignStatusBadge from './CampaignStatusBadge';
 
 function progressColor(pct, status) {
-  if (status === 'funded' || pct >= 100) return '#10b981';
-  if (status === 'closed' || status === 'withdrawn') return '#6b7280';
-  if (pct >= 75) return '#3b82f6';
-  return '#7c3aed';
+  if (status === 'funded' || pct >= 100) return '#10b981'; // green — goal reached
+  if (status === 'closed' || status === 'withdrawn' || status === 'refunded' || status === 'failed') return '#6b7280'; // grey — ended
+  if (pct >= 75) return '#3b82f6'; // blue — nearly there
+  return '#7c3aed'; // default purple
 }
 
 function daysLeft(deadline) {
@@ -24,6 +24,18 @@ function daysSince(date) {
     (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24),
   );
 }
+
+const CATEGORY_LABELS = {
+  technology: 'Technology',
+  community: 'Community',
+  arts: 'Arts & Culture',
+  education: 'Education',
+  environment: 'Environment',
+  health: 'Health',
+  business: 'Business',
+  open_source: 'Open Source',
+  other: 'Other',
+};
 
 export default function CampaignCard({ campaign }) {
   const { t } = useTranslation();
@@ -63,6 +75,14 @@ export default function CampaignCard({ campaign }) {
           >
             <span style={styles.asset}>{campaign.asset_type}</span>
             <CampaignStatusBadge status={campaign.status} />
+            {campaign.recentContributions > 0 && (
+              <span style={styles.trending}>
+                {campaign.recentContributions} contribution{campaign.recentContributions > 1 ? 's' : ''} in 48h
+            {campaign.category && (
+              <span style={styles.categoryBadge}>
+                {CATEGORY_LABELS[campaign.category] || campaign.category}
+              </span>
+            )}
           </div>
           <VerificationBadge status={campaign.creator_kyc_status} compact />
         </div>

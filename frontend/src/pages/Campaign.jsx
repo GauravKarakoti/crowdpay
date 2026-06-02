@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Link, useParams, useLocation } from "react-router-dom";
+import React, { useEffect, useState, useRef } from "react";
+import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ContributeModal from "../components/ContributeModal";
@@ -13,6 +13,8 @@ import VerificationBadge from "../components/VerificationBadge";
 import CampaignStatusBadge from "../components/CampaignStatusBadge";
 import { stellarExpertTxUrl } from "../config/stellar";
 import CampaignQRCode from "../components/CampaignQRCode";
+import { getNetwork, signTransaction } from '@stellar/freighter-api';
+import { isConnected, getPublicKey } from "@stellar/freighter-api";
 
 function escapeHtml(text) {
   return text
@@ -39,10 +41,10 @@ function markdownToHtml(markdown) {
 }
 
 function progressColor(pct, status) {
-  if (status === "funded" || pct >= 100) return "#10b981"; // green — goal reached
-  if (status === "closed" || status === "withdrawn") return "#6b7280"; // grey — ended
-  if (pct >= 75) return "#3b82f6"; // blue — nearly there
-  return "#7c3aed"; // default purple
+  if (status === 'funded' || pct >= 100) return '#10b981'; // green — goal reached
+  if (status === 'closed' || status === 'withdrawn' || status === 'refunded' || status === 'failed') return '#6b7280'; // grey — ended
+  if (pct >= 75) return '#3b82f6'; // blue — nearly there
+  return '#7c3aed'; // default purple
 }
 
 function ContributionRow({ c }) {
@@ -127,7 +129,9 @@ export default function Campaign() {
   const contributeBtnRef = useRef(null);
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, token } = useAuth();
+  const contributeBtnRef = useRef(null);
   const [campaign, setCampaign] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [contributions, setContributions] = useState(null);
@@ -137,6 +141,8 @@ export default function Campaign() {
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeSubmitted, setDisputeSubmitted] = useState(false);
   const [contributed, setContributed] = useState(false);
+  const contributeBtnRef = useRef(null);
+  const [freighterGuestMode, setFreighterGuestMode] = useState(false);
   const [showCreatedBanner, setShowCreatedBanner] = useState(
     !!location.state?.created,
   );
@@ -156,7 +162,6 @@ export default function Campaign() {
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [showQR, setShowQR] = useState(false);
-  const [showEmbedSection, setShowEmbedSection] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isEditingCampaign, setIsEditingCampaign] = useState(false);
@@ -171,6 +176,9 @@ export default function Campaign() {
   const [activeTab, setActiveTab] = useState("contributions");
   const [editingUpdateId, setEditingUpdateId] = useState(null);
   const [analytics, setAnalytics] = useState(null);
+  const [refundBusy, setRefundBusy] = useState(false);
+  const [refundError, setRefundError] = useState("");
+  const [refundSuccess, setRefundSuccess] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -240,6 +248,7 @@ export default function Campaign() {
       "withdrawn",
       "failed",
       "completed",
+      "refunded",
     ].includes(campaign.status);
     if (isCampaignClosed) return;
 
@@ -343,6 +352,15 @@ export default function Campaign() {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  async function handleClone() {
+    try {
+      const data = await api.getCloneData(id, token);
+      navigate('/campaigns/new', { state: { prefill: data } });
+    } catch (err) {
+      alert(err.message || 'Failed to fetch campaign clone data');
+    }
+  }
 
   async function handleInviteSubmit(e) {
     e.preventDefault();
@@ -472,6 +490,56 @@ export default function Campaign() {
     }
   }
 
+  async function handleInitiateRefund() {
+    setRefundBusy(true);
+    setRefundError("");
+    setRefundSuccess("");
+    try {
+      const initRes = await api.initiateRefund(campaign.id);
+      const unsignedXdr = initRes.unsigned_xdr;
+
+      let signedXdr = unsignedXdr;
+      if (user?.wallet_type === "freighter") {
+        const network = await getNetwork();
+        if (network?.error) throw new Error("Could not read Freighter network");
+
+        const signed = await signTransaction(unsignedXdr, {
+          networkPassphrase: network?.networkPassphrase,
+          address: user?.wallet_public_key,
+        });
+        if (signed?.error) throw new Error(signed.error?.message || "Freighter signing failed");
+        if (!signed?.signedTxXdr) throw new Error("Freighter did not return a signed transaction");
+
+        const approveRes = await api.approveRefundCreator(campaign.id, { signed_xdr: signed.signedTxXdr });
+        signedXdr = approveRes.signed_xdr;
+      } else {
+        const approveRes = await api.approveRefundCreator(campaign.id, {});
+        signedXdr = approveRes.signed_xdr;
+      }
+
+      let isPlatformApprover = false;
+      try {
+        const capRes = await api.getWithdrawalCapabilities();
+        if (capRes.can_approve_platform) {
+          isPlatformApprover = true;
+        }
+      } catch (err) {
+        // ignore
+      }
+
+      if (isPlatformApprover) {
+        await api.approveRefundPlatform(campaign.id);
+        setRefundSuccess("Campaign contributions successfully refunded!");
+      } else {
+        setRefundSuccess("Refund signed by creator. Awaiting platform release.");
+      }
+
+      const updatedCampaign = await api.getCampaign(campaign.id);
+      setCampaign(updatedCampaign);
+    } catch (err) {
+      setRefundError(err.message || "Failed to initiate refund.");
+    } finally {
+      setRefundBusy(false);
   async function handleDeleteCampaign() {
     setDeleteError("");
     if (!campaign) return;
@@ -548,6 +616,9 @@ export default function Campaign() {
     100,
     (campaign.raised_amount / campaign.target_amount) * 100,
   ).toFixed(1);
+  const canPostUpdate = user?.id && campaign.creator_id === user.id;
+  const campaignUrl = `${window.location.origin}/campaigns/${id}`;
+  const embedCode = `<iframe src="${window.location.origin}/widget/campaigns/${id}" width="320" height="120" frameborder="0" style="border-radius:10px"></iframe>`;
   const currentUserId = user?.id || user?.userId;
   const canPostUpdate =
     currentUserId && String(campaign.creator_id) === String(currentUserId);
@@ -568,6 +639,20 @@ export default function Campaign() {
     setEditingUpdateId(null);
     setUpdateForm({ title: "", body: "" });
     setUpdatesError("");
+  }
+
+  async function handleFreighterContribute() {
+    try {
+      const connected = await isConnected().then((r) => r?.isConnected ?? r).catch(() => false);
+      if (!connected) {
+        window.open('https://www.freighter.app/', '_blank', 'noopener,noreferrer');
+        return;
+      }
+      setFreighterGuestMode(true);
+      setShowModal(true);
+    } catch {
+      window.open('https://www.freighter.app/', '_blank', 'noopener,noreferrer');
+    }
   }
 
   async function submitUpdate(e) {
@@ -675,6 +760,73 @@ export default function Campaign() {
           Contributions are closed and refunds can be requested.
         </div>
       )}
+      {campaign.status === "refunded" && (
+        <div
+          className="alert alert--success"
+          style={{ marginBottom: "1.25rem" }}
+          role="status"
+        >
+          <strong>Campaign refunded.</strong> This campaign was refunded — all contributions have been returned to their original senders.
+        </div>
+      )}
+      {campaign.status === "failed" &&
+        user &&
+        user.id === campaign.creator_id && (
+          <div
+            style={{
+              background: "var(--color-bg-card, #1e1e2f)",
+              border: "1px solid var(--color-border-light)",
+              borderRadius: "10px",
+              padding: "1.1rem 1.25rem",
+              marginBottom: "1.25rem",
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 0.75rem",
+                fontSize: "0.9rem",
+                color: "var(--color-text-secondary)",
+                lineHeight: 1.55,
+              }}
+            >
+              This campaign did not reach its goal. You can refund all
+              contributors — this will build and sign a Stellar transaction that
+              returns each contributor's exact amount.
+            </p>
+            {refundError && (
+              <p
+                className="alert alert--error"
+                style={{ marginBottom: "0.75rem", fontSize: "0.875rem" }}
+                role="alert"
+              >
+                {refundError}
+              </p>
+            )}
+            {refundSuccess && (
+              <p
+                className="alert alert--success"
+                style={{ marginBottom: "0.75rem", fontSize: "0.875rem" }}
+                role="status"
+              >
+                {refundSuccess}
+              </p>
+            )}
+            <button
+              id="btn-refund-contributors"
+              type="button"
+              className="btn-primary"
+              disabled={refundBusy}
+              onClick={handleInitiateRefund}
+              style={{
+                background: refundBusy ? undefined : "#dc2626",
+                borderColor: refundBusy ? undefined : "#dc2626",
+                fontSize: "0.9rem",
+              }}
+            >
+              {refundBusy ? "Processing refund…" : "Refund contributors"}
+            </button>
+          </div>
+        )}
       {campaign.creator_kyc_status !== "verified" && (
         <div
           className="alert alert--warning"
@@ -758,6 +910,28 @@ export default function Campaign() {
           />
         </div>
 
+        {user && !['failed', 'refunded', 'closed', 'withdrawn'].includes(campaign.status) ? (
+          <button
+            type="button"
+            className="btn-primary"
+            style={styles.cta}
+            ref={contributeBtnRef}
+            aria-label={`Contribute to ${campaign.title}`}
+            onClick={() => setShowModal(true)}
+          >
+            Contribute
+          </button>
+        ) : campaign.status === 'refunded' ? (
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+            This campaign has been <strong>refunded</strong>. All contributions were returned to their original senders.
+          </p>
+        ) : !user && !['failed', 'refunded', 'closed', 'withdrawn'].includes(campaign.status) ? (
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+            <Link to="/login" style={{ color: 'var(--color-accent)', fontWeight: 600 }}>Log in</Link> to contribute to this campaign.
+          </p>
+        ) : (
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+            Contributions are closed while this campaign is{' '}
         {(campaign.min_contribution || campaign.max_contribution) && (
           <div
             style={{
@@ -818,6 +992,23 @@ export default function Campaign() {
             </p>
           )
         ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            <Link
+              to="/login"
+              className="btn-primary"
+              style={{ ...styles.cta, textAlign: 'center', textDecoration: 'none', display: 'block' }}
+            >
+              Log in to contribute
+            </Link>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={styles.cta}
+              onClick={handleFreighterContribute}
+            >
+              Contribute with Freighter
+            </button>
+          </div>
           <p
             style={{
               color: "var(--color-text-secondary)",
@@ -828,6 +1019,17 @@ export default function Campaign() {
             Contributions are closed while this campaign is{" "}
             <strong>{campaign.status}</strong>.
           </p>
+        )}
+
+        {user && (
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ ...styles.cta, marginTop: "0.75rem" }}
+            onClick={handleClone}
+          >
+            Clone campaign
+          </button>
         )}
       </div>
 
@@ -1000,20 +1202,33 @@ export default function Campaign() {
           {showQR ? "Hide QR code" : "Show QR code"}
         </button>
         {showQR && (
-          <div
-            style={{
-              marginTop: "1rem",
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <CampaignQRCode
-              url={`${window.location.origin}/campaigns/${id}`}
-              size={200}
-            />
+          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
+            <CampaignQRCode url={campaignUrl} size={200} />
           </div>
         )}
       </div>
+
+      <details style={{ ...styles.card, marginTop: "-0.75rem" }}>
+        <summary style={styles.embedSummary}>
+          Embed on your site
+        </summary>
+        <pre style={{ ...styles.embedCode, marginTop: "0.75rem" }}>
+          {embedCode}
+        </pre>
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard.writeText(embedCode).then(() => {
+              setEmbedCopied(true);
+              setTimeout(() => setEmbedCopied(false), 2000);
+            });
+          }}
+          className="btn-secondary"
+          style={{ marginTop: "0.75rem", fontSize: "0.85rem", minHeight: "auto" }}
+        >
+          {embedCopied ? "Copied!" : "Copy snippet"}
+        </button>
+      </details>
 
       {/* Report a problem — visible to contributors who have backed this campaign */}
       {user &&
@@ -1045,123 +1260,6 @@ export default function Campaign() {
             )}
           </div>
         )}
-      {canPostUpdate && (
-        <div style={styles.card}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1rem",
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
-              Embed this campaign
-            </h3>
-            <button
-              type="button"
-              onClick={() => setShowEmbedSection(!showEmbedSection)}
-              style={{
-                background: "transparent",
-                color: "var(--color-accent)",
-                border: "1px solid var(--color-accent)",
-                padding: "0.4rem 0.8rem",
-                fontSize: "0.85rem",
-                minHeight: "auto",
-              }}
-            >
-              {showEmbedSection ? "Hide" : "Show"}
-            </button>
-          </div>
-
-          {showEmbedSection && (
-            <>
-              <p
-                style={{
-                  fontSize: "0.85rem",
-                  color: "var(--color-text-hint)",
-                  marginBottom: "1rem",
-                  lineHeight: 1.5,
-                }}
-              >
-                Add this embed code to your website or blog to display a live
-                funding widget for this campaign.
-              </p>
-
-              <div style={{ marginBottom: "1rem" }}>
-                <label
-                  style={{
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    color: "var(--color-text-hint)",
-                    display: "block",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  Embed code
-                </label>
-                <div style={{ position: "relative" }}>
-                  <pre style={styles.embedCode}>
-                    {`<iframe src="${window.location.origin}/embed/campaigns/${campaign.id}" \n        width="480" height="280" frameborder="0">\n</iframe>`}
-                  </pre>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const code = `<iframe src="${window.location.origin}/embed/campaigns/${campaign.id}" width="480" height="280" frameborder="0"></iframe>`;
-                      navigator.clipboard.writeText(code).then(() => {
-                        setEmbedCopied(true);
-                        setTimeout(() => setEmbedCopied(false), 2000);
-                      });
-                    }}
-                    style={{
-                      position: "absolute",
-                      top: "0.5rem",
-                      right: "0.5rem",
-                      background: embedCopied
-                        ? "var(--color-success-text)"
-                        : "var(--color-accent)",
-                      color: "#fff",
-                      padding: "0.4rem 0.8rem",
-                      fontSize: "0.8rem",
-                      minHeight: "auto",
-                    }}
-                  >
-                    {embedCopied ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    color: "var(--color-text-hint)",
-                    display: "block",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  Preview
-                </label>
-                <div style={styles.embedPreview}>
-                  <iframe
-                    src={`/embed/campaigns/${campaign.id}`}
-                    width="100%"
-                    height="280"
-                    frameBorder="0"
-                    title="Campaign embed preview"
-                    style={{
-                      border: "1px solid var(--color-border-light)",
-                      borderRadius: "6px",
-                    }}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
       {token && (
         <div id="withdrawals">
           <WithdrawalsSection
@@ -1810,8 +1908,10 @@ export default function Campaign() {
       {showModal && (
         <ContributeModal
           campaign={campaign}
+          guestFreighterMode={freighterGuestMode}
           onClose={() => {
             setShowModal(false);
+            setFreighterGuestMode(false);
             contributeBtnRef.current?.focus();
           }}
           onSuccess={() => setContributed((v) => !v)}
@@ -2417,6 +2517,12 @@ const styles = {
     whiteSpace: "pre-wrap",
     wordBreak: "break-all",
     paddingRight: "5rem",
+  },
+  embedSummary: {
+    cursor: "pointer",
+    fontSize: "0.85rem",
+    color: "var(--color-accent)",
+    fontWeight: 600,
   },
   embedPreview: {
     background: "var(--color-surface)",
