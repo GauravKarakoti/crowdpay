@@ -172,6 +172,15 @@ export default function Campaign() {
   const [analytics, setAnalytics] = useState(null);
 
   useEffect(() => {
+    document.body.dataset.printUrl = window.location.href;
+    document.body.dataset.printDate = new Date().toLocaleDateString();
+    return () => {
+      delete document.body.dataset.printUrl;
+      delete document.body.dataset.printDate;
+    };
+  }, []);
+
+  useEffect(() => {
     setLoadError("");
     api
       .getCampaign(id, token)
@@ -649,6 +658,7 @@ export default function Campaign() {
         </div>
         <div
           role="progressbar"
+          className="campaign-progress-bar"
           aria-valuenow={Number(pct)}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -678,6 +688,7 @@ export default function Campaign() {
       </div>
 
       <div
+        data-no-print
         style={{
           display: "flex",
           gap: "0.65rem",
@@ -788,6 +799,7 @@ export default function Campaign() {
       {/* Edit campaign button - visible only to creator */}
       {user && campaign && user.userId === campaign.creator_id && ['active', 'funded'].includes(campaign.status) && (
         <div
+          data-no-print
           style={{
             display: "flex",
             gap: "0.65rem",
@@ -818,21 +830,19 @@ export default function Campaign() {
       </div>
 
       <div style={{ marginBottom: '1.75rem' }}>
-        <button type="button" className="btn-secondary" onClick={() => setShowQR((v) => !v)}>
+        <button type="button" className="btn-secondary" data-no-print onClick={() => setShowQR((v) => !v)}>
           {showQR ? 'Hide QR code' : 'Show QR code'}
         </button>
-        {showQR && (
-          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
-            <CampaignQRCode url={`${window.location.origin}/campaigns/${id}`} size={200} />
-          </div>
-        )}
+        <div className="qr-wrapper" style={{ marginTop: '1rem', display: showQR ? 'flex' : 'none', justifyContent: 'center' }}>
+          <CampaignQRCode url={`${window.location.origin}/campaigns/${id}`} size={200} />
+        </div>
       </div>
 
       {/* Report a problem — visible to contributors who have backed this campaign */}
       {user &&
         contributions?.some((c) => c.sender_public_key) &&
         campaign.creator_id !== user.id && (
-          <div style={{ marginBottom: "1.25rem" }}>
+          <div style={{ marginBottom: "1.25rem" }} data-no-print>
             {disputeSubmitted ? (
               <p className="alert alert--success" role="status">
                 Your dispute has been submitted. The platform team will review
@@ -859,7 +869,7 @@ export default function Campaign() {
           </div>
         )}
       {canPostUpdate && (
-        <div style={styles.card}>
+        <div style={styles.card} data-no-print>
           <div
             style={{
               display: "flex",
@@ -971,7 +981,7 @@ export default function Campaign() {
       )}
 
       {token && (
-        <div id="withdrawals">
+        <div id="withdrawals" data-no-print>
         <WithdrawalsSection
           campaign={campaign}
           milestones={milestones}
@@ -1001,7 +1011,7 @@ export default function Campaign() {
         assetType={campaign.asset_type}
       />
       {isOwner && (
-        <div style={{ marginBottom: "2rem" }}>
+        <div style={{ marginBottom: "2rem" }} data-no-print>
           <h2 style={styles.sectionTitle}>Team Management</h2>
           <div className="campaign-card" style={{ marginBottom: "1.5rem" }}>
             <strong style={{ marginBottom: "0.75rem", display: "block" }}>
@@ -1181,6 +1191,7 @@ export default function Campaign() {
           onSubmit={submitUpdate}
           className="campaign-card"
           style={{ marginBottom: "1rem" }}
+          data-no-print
         >
           <strong style={{ marginBottom: "0.5rem", display: "block" }}>
             Post update
@@ -1326,7 +1337,7 @@ export default function Campaign() {
         </div>
       ) : (
         <>
-          <div style={styles.list}>
+          <div style={styles.list} className="contributions-list">
             {contributions.map((c) => (
               <ContributionRow key={c.id} c={c} />
             ))}
