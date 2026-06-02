@@ -171,6 +171,12 @@ export default function Campaign() {
   const [activeTab, setActiveTab] = useState("contributions");
   const [editingUpdateId, setEditingUpdateId] = useState(null);
   const [analytics, setAnalytics] = useState(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [hasPendingWithdrawal, setHasPendingWithdrawal] = useState(false);
+
   useEffect(() => {
     setLoadError("");
     api
@@ -210,6 +216,17 @@ export default function Campaign() {
       .getCampaignAnalytics(id)
       .then(setAnalytics)
       .catch(() => setAnalytics(null));
+
+    // Check for pending withdrawals
+    if (token) {
+      api
+        .listWithdrawals(id)
+        .then((withdrawals) => {
+          const hasPending = withdrawals.some((w) => w.status === "pending");
+          setHasPendingWithdrawal(hasPending);
+        })
+        .catch(() => setHasPendingWithdrawal(false));
+    }
   }, [id, token, contributed, showAll]);
 
   useEffect(() => {
@@ -452,6 +469,30 @@ export default function Campaign() {
       setEditError(err.message || "Failed to update campaign");
     } finally {
       setEditLoading(false);
+    }
+  }
+
+  async function handleDeleteCampaign() {
+    setDeleteError("");
+    if (!campaign) return;
+
+    // Check if confirmation matches campaign title
+    if (deleteConfirmation !== campaign.title) {
+      setDeleteError("Confirmation does not match campaign title");
+      return;
+    }
+
+    try {
+      setDeleteLoading(true);
+      await api.deleteCampaign(campaign.id, token);
+      setShowDeleteDialog(false);
+      setDeleteConfirmation("");
+      // Redirect to home after successful deletion
+      window.location.href = "/";
+    } catch (err) {
+      setDeleteError(err.message || "Failed to delete campaign");
+    } finally {
+      setDeleteLoading(false);
     }
   }
 
@@ -925,6 +966,23 @@ export default function Campaign() {
             >
               Edit Campaign
             </button>
+            {campaign.status === "active" && !hasPendingWithdrawal && (
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{
+                  color: "#dc2626",
+                  fontSize: "0.85rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                }}
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                Delete campaign
+              </button>
+            )}
           </div>
         )}
 
@@ -1338,6 +1396,41 @@ export default function Campaign() {
           Updates ({updates.length})
         </button>
       </div>
+          {updates.map((update) => (
+            <article key={update.id} className="campaign-card">
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "0.5rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <strong>{update.title}</strong>
+                <span
+                  style={{
+                    color: "var(--color-text-hint)",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  {update.author_name} •{" "}
+                  {new Date(update.created_at).toLocaleString()}
+                </span>
+              </div>
+              <div
+                style={{
+                  marginTop: "0.5rem",
+                  color: "var(--color-text-primary)",
+                  lineHeight: 1.5,
+                }}
+                dangerouslySetInnerHTML={{
+                  __html: markdownToHtml(update.body),
+                }}
+              />
+            </article>
+          ))}
+        </div>
+      )}
 
       {/* Analytics Section */}
       {analytics && (
@@ -1627,6 +1720,57 @@ export default function Campaign() {
               >
                 Every contribution counts towards making this goal a reality.
               </p>
+      <h2 style={styles.sectionTitle}>
+        Backer Wall {contributions !== null ? `(${totalContributions})` : ""}
+        {isLive && (
+          <span style={styles.liveIndicator} title="Live updates active">
+            <span style={styles.liveDot} />
+            Live
+          </span>
+        )}
+      </h2>
+      {contributions === null ? (
+        <ContributionListSkeleton />
+      ) : contributions.length === 0 ? (
+        <div style={styles.emptyBackers}>
+          <p>Be the first to back this!</p>
+          <p
+            style={{
+              fontSize: "0.9rem",
+              color: "var(--color-text-secondary)",
+              marginTop: "0.25rem",
+            }}
+          >
+            Every contribution counts towards making this goal a reality.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div style={styles.list}>
+            {contributions.map((c) => (
+              <ContributionRow key={c.id} c={c} />
+            ))}
+          </div>
+          {totalContributions > 10 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                marginTop: "1rem",
+              }}
+            >
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowAll((prev) => !prev)}
+                style={{
+                  padding: "0.5rem 1.5rem",
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
+                }}
+              >
+                {showAll ? "Show less" : `Show all (${totalContributions})`}
+              </button>
             </div>
           ) : (
             <>
@@ -1864,6 +2008,133 @@ export default function Campaign() {
                 style={{ opacity: editLoading ? 0.6 : 1 }}
               >
                 {editLoading ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Campaign Confirmation Dialog */}
+      {showDeleteDialog && campaign && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              background: "var(--color-surface)",
+              borderRadius: "8px",
+              padding: "2rem",
+              maxWidth: "500px",
+              width: "90%",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "1.5rem",
+                fontWeight: 700,
+                marginBottom: "1rem",
+                color: "var(--color-text-primary)",
+              }}
+            >
+              Delete Campaign
+            </h2>
+            <p
+              style={{
+                fontSize: "0.95rem",
+                color: "var(--color-text-secondary)",
+                marginBottom: "1.5rem",
+                lineHeight: 1.5,
+              }}
+            >
+              Are you sure you want to delete this campaign? This action cannot
+              be undone. All contribution and withdrawal history will be
+              preserved, but the campaign will no longer be visible to the
+              public.
+            </p>
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 600,
+                  marginBottom: "0.5rem",
+                  fontSize: "0.9rem",
+                  color: "var(--color-text-primary)",
+                }}
+              >
+                Type the campaign title to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmation}
+                onChange={(e) => setDeleteConfirmation(e.target.value)}
+                placeholder={campaign.title}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "4px",
+                  fontSize: "1rem",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            {deleteError && (
+              <p
+                className="alert alert--error"
+                style={{ marginBottom: "1.5rem" }}
+              >
+                {deleteError}
+              </p>
+            )}
+            <div
+              style={{
+                display: "flex",
+                gap: "1rem",
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setShowDeleteDialog(false);
+                  setDeleteConfirmation("");
+                  setDeleteError("");
+                }}
+                disabled={deleteLoading}
+                style={{ opacity: deleteLoading ? 0.6 : 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleDeleteCampaign}
+                disabled={
+                  deleteLoading || deleteConfirmation !== campaign.title
+                }
+                style={{
+                  opacity:
+                    deleteLoading || deleteConfirmation !== campaign.title
+                      ? 0.6
+                      : 1,
+                  background: "#dc2626",
+                  borderColor: "#dc2626",
+                }}
+              >
+                {deleteLoading ? "Deleting..." : "Delete Campaign"}
               </button>
             </div>
           </div>

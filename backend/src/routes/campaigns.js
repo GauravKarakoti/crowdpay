@@ -70,7 +70,7 @@ const requireCampaignMember = (...allowedRoles) => {
     }
 
     const { rows: campaignRows } = await db.query(
-      "SELECT creator_id FROM campaigns WHERE id = $1",
+      "SELECT creator_id FROM campaigns WHERE id = $1 AND deleted_at IS NULL",
       [campaignId],
     );
     if (!campaignRows.length) {
@@ -350,7 +350,7 @@ router.post(
     try {
       await client.query("BEGIN");
       const { rows: campaignRows } = await client.query(
-        "SELECT id, creator_id, status FROM campaigns WHERE id = $1 FOR UPDATE",
+        "SELECT id, creator_id, status FROM campaigns WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
         [req.params.id],
       );
       if (!campaignRows.length) {
@@ -444,7 +444,7 @@ router.get(
            (SELECT COUNT(DISTINCT sender_public_key)::int FROM contributions WHERE campaign_id = $1) AS contributor_count
     FROM campaigns c
     JOIN users u ON u.id = c.creator_id
-    WHERE c.id = $1
+    WHERE c.id = $1 AND c.deleted_at IS NULL
   `;
     await refreshCampaignStatus(req.params.id);
     const { rows } = await db.query(query, [req.params.id]);
@@ -512,7 +512,7 @@ router.get(
     const { rows } = await db.query(
       `SELECT id, title, description, target_amount, raised_amount, asset_type, status,
             (SELECT COUNT(*)::int FROM contributions c WHERE c.campaign_id = campaigns.id) AS backer_count
-     FROM campaigns WHERE id = $1`,
+     FROM campaigns WHERE id = $1 AND deleted_at IS NULL`,
       [campaignId],
     );
     if (!rows.length)
@@ -550,7 +550,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const campaignId = req.params.id;
     const { rows: campaignRows } = await db.query(
-      "SELECT show_backer_amounts FROM campaigns WHERE id = $1",
+      "SELECT show_backer_amounts FROM campaigns WHERE id = $1 AND deleted_at IS NULL",
       [campaignId],
     );
     if (!campaignRows.length)
@@ -578,9 +578,10 @@ router.get(
   "/:id/stream",
   asyncHandler(async (req, res) => {
     const campaignId = parseInt(req.params.id, 10);
-    const { rows } = await db.query("SELECT id FROM campaigns WHERE id = $1", [
-      campaignId,
-    ]);
+    const { rows } = await db.query(
+      "SELECT id FROM campaigns WHERE id = $1 AND deleted_at IS NULL",
+      [campaignId],
+    );
     if (!rows.length)
       return res.status(404).json({ error: "Campaign not found" });
 
@@ -640,7 +641,7 @@ router.get(
      *         description: Campaign not found
      */
     const { rows } = await db.query(
-      "SELECT wallet_public_key FROM campaigns WHERE id = $1",
+      "SELECT wallet_public_key FROM campaigns WHERE id = $1 AND deleted_at IS NULL",
       [req.params.id],
     );
     if (!rows.length)
@@ -1178,6 +1179,43 @@ router.post(
   },
 );
 
+router.get(
+  "/:id/updates",
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 10));
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+    const { rows } = await db.query(
+      `SELECT cu.id, cu.campaign_id, cu.author_id, cu.title, cu.body, cu.created_at, u.name AS author_name
+     FROM campaign_updates cu
+     JOIN users u ON u.id = cu.author_id
+     WHERE cu.campaign_id = $1
+     ORDER BY cu.created_at DESC
+     LIMIT $2 OFFSET $3`,
+      [req.params.id, limit, offset],
+    );
+    res.json(rows);
+  }),
+);
+
+router.post(
+  "/:id/updates",
+  requireAuth,
+  requireCampaignMember("owner", "manager"),
+  createCampaignUpdateValidation,
+  validateRequest,
+  asyncHandler(async (req, res) => {
+    const { title, body } = req.body;
+
+    const { rows } = await db.query(
+      `INSERT INTO campaign_updates (campaign_id, author_id, title, body)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, campaign_id, author_id, title, body, created_at`,
+      [req.params.id, req.user.userId, title.trim(), body.trim()],
+    );
+    res.status(201).json(rows[0]);
+  }),
+);
+
 // POST /campaigns/:id/members — owner invites a user by email
 router.post(
   "/:id/members",
@@ -1423,6 +1461,59 @@ router.get(
     );
 
     res.json({ dailyTotals, assetBreakdown, topContributors });
+  }),
+);
+
+// DELETE /api/campaigns/:id - Soft delete a campaign (creator or admin only)
+router.delete(
+  "/:id",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const campaignId = req.params.id;
+
+    // Check for pending withdrawals
+    const { rows: pending } = await db.query(
+      `SELECT id FROM withdrawal_requests WHERE campaign_id = $1 AND status = 'pending'`,
+      [campaignId],
+    );
+    if (pending.length) {
+      return res.status(409).json({
+        error: "Cannot delete a campaign with a pending withdrawal",
+      });
+    }
+
+    // Soft delete the campaign
+    const { rows } = await db.query(
+      `UPDATE campaigns
+       SET deleted_at = NOW()
+       WHERE id = $1 AND creator_id = $2 AND deleted_at IS NULL
+       RETURNING id`,
+      [campaignId, req.user.userId],
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({
+        error: "Campaign not found or already deleted",
+      });
+    }
+
+    res.json({ deleted: true });
+  }),
+);
+
+// POST /api/admin/campaigns/:id/restore - Restore a soft-deleted campaign (admin only)
+router.post(
+  "/admin/campaigns/:id/restore",
+  requireAuth,
+  requireRole("admin"),
+  asyncHandler(async (req, res) => {
+    const campaignId = req.params.id;
+
+    await db.query(`UPDATE campaigns SET deleted_at = NULL WHERE id = $1`, [
+      campaignId,
+    ]);
+
+    res.json({ restored: true });
   }),
 );
 

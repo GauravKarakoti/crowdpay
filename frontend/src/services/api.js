@@ -6,8 +6,8 @@ const BASE = `${API_BASE_URL}/api`;
 let refreshPromise = null;
 
 const TIMEOUTS = {
-  GET: 10_000,
-  POST: 20_000,
+  GET: 10_000, // 10 s
+  POST: 20_000, // 20 s — Stellar submissions can be slow
   PATCH: 15_000,
   DELETE: 10_000,
 };
@@ -25,9 +25,7 @@ async function request(method, path, body, options = {}) {
   if (query && Object.keys(query).length) {
     const params = new URLSearchParams();
     Object.entries(query).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== "") {
-        params.set(k, String(v));
-      }
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
     });
     url += `?${params.toString()}`;
   }
@@ -221,7 +219,7 @@ export const api = {
   getCampaignBalance: (id) => request("GET", `/campaigns/${id}/balance`),
   createCampaign: (body) => request("POST", "/campaigns", body),
   updateCampaign: (id, body) => request("PATCH", `/campaigns/${id}`, body),
-
+  deleteCampaign: (id) => request("DELETE", `/campaigns/${id}`),
   uploadCampaignCoverImage: (campaignId, file) => {
     const formData = new FormData();
     formData.append("cover_image", file);
@@ -241,7 +239,9 @@ export const api = {
     request("DELETE", `/campaigns/${campaignId}/members/${userId}`),
   acceptCampaignInvitation: (campaignId, body) =>
     request("POST", `/campaigns/${campaignId}/members/accept`, body),
-
+  getAnchorInfo: () => request("GET", "/anchor/info"),
+  startAnchorDeposit: (body) => request("POST", "/anchor/deposits/start", body),
+  getAnchorDepositStatus: (id) => request("GET", `/anchor/deposits/${id}`),
   getCampaignUpdates: (campaignId, options = {}) =>
     request("GET", `/campaigns/${campaignId}/updates`, null, {
       query: options,
@@ -257,6 +257,16 @@ export const api = {
     request("GET", `/contributions/campaign/${campaignId}`, null, {
       query: options,
     }),
+  getMilestones: (campaignId) =>
+    request("GET", `/campaigns/${campaignId}/milestones`),
+  setCampaignMilestones: (campaignId, milestones) =>
+    request("POST", `/campaigns/${campaignId}/milestones`, { milestones }),
+  submitMilestoneEvidence: (id, body) =>
+    request("POST", `/milestones/${id}/submit`, body),
+  approveMilestone: (id, body) =>
+    request("POST", `/milestones/${id}/release`, body || {}),
+  rejectMilestone: (id, body) =>
+    request("POST", `/milestones/${id}/reject`, body || {}),
   contribute: (body) => request("POST", "/contributions", body),
   prepareContribution: (body) =>
     request("POST", "/contributions/prepare", body),
@@ -310,36 +320,28 @@ export const api = {
   updateDispute: (id, body) => request("PATCH", `/disputes/${id}`, body),
   getDisputeEvents: (id) => request("GET", `/disputes/${id}/events`),
 
-  getAdminStats: () => request("GET", "/admin/stats"),
-  getAdminCampaigns: () => request("GET", "/admin/campaigns"),
-  getAdminMilestones: (options = {}) =>
-    request("GET", "/admin/milestones", null, { query: options }),
-  getAdminUsers: (include_banned = false) =>
-    request("GET", "/admin/users", null, {
-      query: { include_banned: include_banned ? "true" : "false" },
-    }),
-  getAdminAuditLog: (options = {}) =>
-    request("GET", "/admin/audit-log", null, { query: options }),
-  updateCampaignStatus: (id, status) =>
-    request("PATCH", `/admin/campaigns/${id}/status`, { status }),
-  adminSuspendCampaign: (id, body) =>
-    request("PATCH", `/admin/campaigns/${id}/suspend`, body),
-  adminRestoreCampaign: (id) =>
-    request("PATCH", `/admin/campaigns/${id}/restore`, {}),
-  adminDeleteCampaign: (id, body) =>
-    request("DELETE", `/admin/campaigns/${id}`, body),
-  adminBanUser: (id, body) => request("PATCH", `/admin/users/${id}/ban`, body),
-  adminUnbanUser: (id) => request("PATCH", `/admin/users/${id}/unban`, {}),
-  adminPromoteUser: (id) => request("PATCH", `/admin/users/${id}/promote`, {}),
-  adminDemoteUser: (id) => request("PATCH", `/admin/users/${id}/demote`, {}),
+  getAdminStats: () => request('GET', '/admin/stats'),
+  getAdminCampaigns: () => request('GET', '/admin/campaigns'),
+  getAdminMilestones: (options = {}) => request('GET', '/admin/milestones', null, { query: options }),
+  getAdminUsers: (include_banned = false) => request('GET', '/admin/users', null, { query: { include_banned: include_banned ? 'true' : 'false' } }),
+  getAdminAuditLog: (options = {}) => request('GET', '/admin/audit-log', null, { query: options }),
+  updateCampaignStatus: (id, status) => request('PATCH', `/admin/campaigns/${id}/status`, { status }),
+  adminSuspendCampaign: (id, body) => request('PATCH', `/admin/campaigns/${id}/suspend`, body),
+  adminRestoreCampaign: (id) => request('PATCH', `/admin/campaigns/${id}/restore`, {}),
+  adminDeleteCampaign: (id, body) => request('DELETE', `/admin/campaigns/${id}`, body),
+  adminBanUser: (id, body) => request('PATCH', `/admin/users/${id}/ban`, body),
+  adminUnbanUser: (id) => request('PATCH', `/admin/users/${id}/unban`, {}),
+  adminPromoteUser: (id) => request('PATCH', `/admin/users/${id}/promote`, {}),
+  adminDemoteUser: (id) => request('PATCH', `/admin/users/${id}/demote`, {}),
+  listApiKeys: () => request('GET', '/api-keys'),
+  createApiKey: (body) => request('POST', '/api-keys', body),
+  deleteApiKey: (id) => request('DELETE', `/api-keys/${id}`),
+  listWebhooks: () => request('GET', '/webhooks'),
+  createWebhook: (body) => request('POST', '/webhooks', body),
+  listWebhookDeliveries: (options = {}) => request('GET', '/webhooks/deliveries', null, { query: options }),
+  deleteWebhook: (id) => request('DELETE', `/webhooks/${id}`),
 
-  listApiKeys: () => request("GET", "/api-keys"),
-  createApiKey: (body) => request("POST", "/api-keys", body),
-  deleteApiKey: (id) => request("DELETE", `/api-keys/${id}`),
-
-  listWebhooks: () => request("GET", "/webhooks"),
-  createWebhook: (body) => request("POST", "/webhooks", body),
-  listWebhookDeliveries: (options = {}) =>
-    request("GET", "/webhooks/deliveries", null, { query: options }),
-  deleteWebhook: (id) => request("DELETE", `/webhooks/${id}`),
+  getNotifications: () => request('GET', '/notifications'),
+  markNotificationRead: (id) => request('PATCH', `/notifications/${id}/read`, {}),
+  markAllNotificationsRead: () => request('PATCH', '/notifications/read-all', {}),
 };
