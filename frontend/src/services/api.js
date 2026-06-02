@@ -199,6 +199,7 @@ export const api = {
 
   getCampaigns: (options = {}) => request('GET', '/campaigns', null, { query: options }),
   getCampaign: (id) => request('GET', `/campaigns/${id}`),
+  getCloneData: (id) => request('GET', `/campaigns/${id}/clone-data`),
   getCampaignAnalytics: (id) => request('GET', `/campaigns/${id}/analytics`),
   getCampaignEmbed: (id) => request('GET', `/campaigns/${id}/embed`),
   getCampaignBackers: (id) => request('GET', `/campaigns/${id}/backers`),
