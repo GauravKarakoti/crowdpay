@@ -22,6 +22,7 @@ const { startLedgerMonitor, getLedgerStreamHealth } = require('./services/ledger
 const { refreshActiveCampaignStatuses } = require('./services/campaignStatusService');
 const { sendAlert } = require('./services/alerting');
 const { assertNoLegacyPlaintextUserWalletSecrets } = require('./services/walletSecrets');
+const db = require('./config/database');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const rateLimit = require('express-rate-limit');
