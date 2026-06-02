@@ -40,8 +40,9 @@ const {
   createCampaignUpdateValidation,
   getCampaignsValidation,
   validateRequest,
-} = require("../middleware/validation");
-const asyncHandler = require("../utils/asyncHandler");
+} = require('../middleware/validation');
+const asyncHandler = require('../utils/asyncHandler');
+const cache = require('../utils/cache');
 
 const crypto = require("crypto");
 
@@ -242,6 +243,11 @@ router.get('/', getCampaignsValidation, validateRequest, asyncHandler(async (req
   const { search, status, asset, category, sort = 'newest' } = req.query;
   const limit = Math.min(Number(req.query.limit || 20), 100);
   const offset = Math.max(Number(req.query.offset || 0), 0);
+
+  const cacheKey = `campaigns:list:${JSON.stringify(req.query)}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return res.json(cached);
+
   const filters = [];
   const params = [];
   let searchParamRef = null;
@@ -436,6 +442,10 @@ router.get(
   `;
     const result = await db.query(query, [...params, limit, offset]);
 
+  const payload = { total, limit, offset, campaigns: result.rows };
+  cache.set(cacheKey, payload, 30_000); // 30 s TTL
+  res.json(payload);
+}));
     res.json({ total, limit, offset, campaigns: result.rows });
   }),
 );
@@ -592,6 +602,36 @@ router.get('/:id/clone-data', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 // Get single Campaign
+router.get('/:id', asyncHandler(async (req, res) => {
+  /**
+   * @openapi
+   * /api/campaigns/{id}:
+   *   get:
+   *     tags: [Campaigns]
+   *     summary: Get campaign by id
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: OK
+   *       404:
+   *         description: Not found
+   */
+  const campaignId = req.params.id;
+  const isAuthenticated = !!req.headers.authorization?.startsWith('Bearer ');
+  const cacheKey = `campaigns:id:${campaignId}`;
+
+  // Only serve cached response for unauthenticated requests — authenticated
+  // requests need user_role which is caller-specific.
+  if (!isAuthenticated) {
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+  }
+
+  const query = `
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
@@ -619,10 +659,18 @@ router.get(
     JOIN users u ON u.id = c.creator_id
     WHERE c.id = $1 AND c.deleted_at IS NULL
   `;
-    await refreshCampaignStatus(req.params.id);
-    const { rows } = await db.query(query, [req.params.id]);
-    if (!rows.length)
-      return res.status(404).json({ error: "Campaign not found" });
+  await refreshCampaignStatus(campaignId);
+  const { rows } = await db.query(query, [campaignId]);
+  if (!rows.length) return res.status(404).json({ error: 'Campaign not found' });
+  
+  const campaign = rows[0];
+  
+  // Allow viewing suspended campaigns with a notice, but deleted campaigns are not accessible
+  if (campaign.deleted_at) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+  
+  let userRole = null;
 
     const campaign = rows[0];
 
@@ -668,9 +716,13 @@ router.get(
         "This campaign has been suspended and cannot receive new contributions";
     }
 
-    res.json(response);
-  }),
-);
+  // Cache the public view (no user_role) for unauthenticated visitors
+  if (!isAuthenticated) {
+    cache.set(cacheKey, response, 15_000); // 15 s TTL
+  }
+
+  res.json(response);
+}));
 
 // Embeddable campaign widget data (public, with permissive CORS)
 router.get(
@@ -1219,9 +1271,11 @@ router.post(
 
     watchCampaignWallet(campaign.id, wallet.publicKey);
 
-    res.status(201).json(campaign);
-  }),
-);
+  // New campaign — bust the list cache so it appears immediately
+  cache.invalidatePrefix('campaigns:list:');
+
+  res.status(201).json(campaign);
+}));
 
 // PATCH /campaigns/:id - Update campaign (title, description, deadline)
 router.patch(

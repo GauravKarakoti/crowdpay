@@ -16,6 +16,7 @@ const {
   emitWebhookEventForUser,
   WEBHOOK_EVENTS,
 } = require("./webhookDispatcher");
+const cache = require("../utils/cache");
 const { createNotification } = require("./notifications");
 const Sentry = require("@sentry/node");
 
@@ -367,6 +368,11 @@ async function handlePayment(campaignId, walletPublicKey, payment) {
 
   if (postCommitHooks) {
     setImmediate(() => {
+      // Bust public caches — contribution changes raised_amount and contributor_count
+      cache.invalidate(`campaigns:id:${postCommitHooks.campaignId}`);
+      cache.invalidatePrefix('campaigns:list:');
+      cache.invalidatePrefix('stats:');
+
       sendContributionReceipt(postCommitHooks.receiptPayload).catch((e) =>
         logger.error("[receipt] Email failed", {
           campaign_id: postCommitHooks.campaignId,
