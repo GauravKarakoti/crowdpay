@@ -23,7 +23,7 @@ const {
   USDC,
   isTestnet,
   configuredAssets,
-} = require("../config/stellar");
+} = require('../config/stellar');
 const Sentry = require("@sentry/node");
 const {
   TX_TIMEOUT_CONTRIBUTION_S,
