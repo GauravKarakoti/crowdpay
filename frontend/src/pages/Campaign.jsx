@@ -3,6 +3,7 @@ import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ContributeModal from "../components/ContributeModal";
+import RelativeTime from "../components/RelativeTime";
 import DisputeModal from "../components/DisputeModal";
 import TransactionHistory from "../components/TransactionHistory";
 import MilestoneTracker from "../components/MilestoneTracker";
@@ -89,11 +90,7 @@ function ContributionRow({ c }) {
               {c.sender_public_key.slice(0, 4)}…{c.sender_public_key.slice(-4)}
             </button>
             {" • "}
-            {new Date(c.created_at).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
+            <RelativeTime date={c.created_at} />
           </div>
           {c.refund_status && (
             <div style={styles.refundTag}>
@@ -1604,7 +1601,7 @@ export default function Campaign() {
                   }}
                 >
                   {update.author_name} •{" "}
-                  {new Date(update.created_at).toLocaleString()}
+                  <RelativeTime date={update.created_at} />
                 </span>
               </div>
               <div
@@ -1721,6 +1718,134 @@ export default function Campaign() {
         </div>
       )}
 
+      <h2 style={styles.sectionTitle}>
+        Backer Wall {contributions !== null ? `(${totalContributions})` : ""}
+        {isLive && (
+          <span style={styles.liveIndicator} title="Live updates active">
+            <span style={styles.liveDot} />
+            Live
+          </span>
+        )}
+      </h2>
+      {contributions === null ? (
+        <ContributionListSkeleton />
+      ) : contributions.length === 0 ? (
+        <div style={styles.emptyBackers}>
+          <p>Be the first to back this!</p>
+          <p
+            style={{ fontSize: "0.9rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}
+          >
+            Every contribution counts towards making this goal a reality.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div style={styles.list} className="contributions-list">
+            {contributions.map((c) => (
+              <ContributionRow key={c.id} c={c} />
+            ))}
+          </div>
+          {totalContributions > 10 && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowAll((prev) => !prev)}
+                style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', cursor: 'pointer' }}
+              >
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={updateBusy}
+                >
+                  {updateBusy
+                    ? "Saving..."
+                    : editingUpdateId
+                      ? "Save update"
+                      : "Post update"}
+                </button>
+
+                {editingUpdateId && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={cancelUpdateEdit}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+
+          {updates.length === 0 ? (
+            <p
+              style={{ color: "var(--color-text-muted)", marginBottom: "1rem" }}
+            >
+              No updates yet — the creator hasn't posted anything.
+            </p>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gap: "0.75rem",
+                marginBottom: "1.25rem",
+              }}
+            >
+              {updates.map((update) => (
+                <article key={update.id} className="campaign-card">
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "0.5rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <strong>{update.title}</strong>
+                    <span
+                      style={{
+                        color: "var(--color-text-hint)",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      {update.author_name} •{" "}
+                      <RelativeTime date={update.created_at} />
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
+                      color: "var(--color-text-primary)",
+                      lineHeight: 1.5,
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: markdownToHtml(update.body),
+                    }}
+                  />
+
+                  {canPostUpdate && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        marginTop: "0.75rem",
+                      }}
+                    >
+                      {canEditUpdate(update) && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => startEditUpdate(update)}
+                          style={{
+                            fontSize: "0.85rem",
+                            padding: "0.4rem 0.75rem",
+                          }}
+                        >
+                          Edit
+                        </button>
+                      )}
 
 
           <h2 style={styles.sectionTitle}>
