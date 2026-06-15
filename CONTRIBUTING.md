@@ -1,147 +1,160 @@
 # Contributing to CrowdPay
 
-Thanks for your interest in contributing! This guide covers everything you need to get from zero to a merged PR.
+CrowdPay uses [GrantFox](https://grantfox.xyz) to fund and coordinate open-source contributions. Contributors pick a funded issue, build it, and submit a PR. One issue per contributor at a time.
 
 ---
 
-## Prerequisites
+## Quick Setup
 
-- **Node.js 20+** — [nodejs.org](https://nodejs.org)
-- **PostgreSQL 14+** — [postgresql.org](https://www.postgresql.org/download/)
-- **A free Stellar testnet account** — [Stellar Laboratory](https://laboratory.stellar.org)
-- **Docker** *(optional)* — simplest way to run the full stack; see [docker-compose.yml](docker-compose.yml)
-
----
-
-## Local Setup
-
-### Option A — Docker (recommended for a quick start)
+### Docker (fastest)
 
 ```bash
 git clone https://github.com/Savitura/crowdpay.git
 cd crowdpay
-cp backend/.env.example backend/.env   # fill in values
+cp backend/.env.example backend/.env
 docker compose up
 ```
 
-| Service  | URL                   |
-|----------|-----------------------|
+| Service | URL |
+|---|---|
 | Frontend | http://localhost:5173 |
-| Backend  | http://localhost:3001 |
-| Postgres | localhost:5432        |
+| Backend | http://localhost:3001 |
+| API docs | http://localhost:3001/api/docs |
 
-The database schema is applied automatically on first start.
+### Manual
+
+```bash
+# Backend
+cd backend && npm install && cp .env.example .env
+npm run migrate:fresh
+npm run dev          # http://localhost:3001
+
+# Frontend (new terminal)
+cd frontend && npm install && npm run dev   # http://localhost:5173
+```
+
+Fund your testnet platform account:
+```bash
+curl "https://friendbot.stellar.org?addr=<PLATFORM_PUBLIC_KEY>"
+```
 
 ---
 
-### Option B — Manual setup
+## Picking Up an Issue
 
-```bash
-# 1. Fork then clone your fork
-git clone https://github.com/<your-username>/crowdpay.git
-cd crowdpay
+1. Find an open, unassigned issue in [GitHub Issues](https://github.com/Savitura/crowdpay/issues)
+2. Comment to claim it — wait for assignment before starting
+3. Fork and branch off `main`: `feat/issue-<number>-short-description`
+4. Stay current with `git rebase origin/main`
 
-# 2. Configure the backend environment
-cp backend/.env.example backend/.env
-# Open backend/.env and fill in: DB credentials, Stellar platform keypair, etc.
+Read the full issue body before writing any code. Each issue has an acceptance criteria checklist — that's what your PR needs to satisfy.
 
-# 3. Create the database and apply migrations
-cd backend
-npm install
-npm run migrate:fresh   # first time — creates schema + runs all migrations
-# npm run migrate       # subsequent pulls — applies only new migrations
+---
 
-# 4. Fund your testnet platform account
-node contracts/stellar/campaignWallet.js --setup-platform
+## Working with AI Agents
 
-# 5. Install frontend dependencies
-cd ../frontend && npm install
+AI coding assistants (Claude Code, Cursor, Copilot, etc.) are welcome and encouraged. They're especially effective on this codebase because the issues are written with enough context to be used directly as prompts. That said, **the contributor is responsible for everything in the PR** — unreviewed AI output that breaks tests or ignores the acceptance criteria will be closed.
 
-# 6. Start both dev servers (two terminals)
-# Terminal 1
-cd backend && npm run dev
+### Effective patterns
 
-# Terminal 2
-cd frontend && npm run dev
+**1. Start with a read, not a write**
+
+Ask the agent to read the relevant files before it touches anything:
+
+```
+Read these files first:
+- backend/src/services/emailService.js
+- backend/src/services/campaignStatusService.js
+- backend/src/routes/campaigns.js
+
+Then tell me what you understand about how campaign status changes work
+and what changes the following issue requires. Don't write code yet.
+
+[paste issue body]
 ```
 
-Visit **http://localhost:5173** — backend runs on **http://localhost:3001**.
+This surfaces misunderstandings before they become bad diffs.
+
+**2. Give it the issue verbatim**
+
+The issues in this repo are written to be machine-readable. Paste the full body — don't paraphrase. The acceptance criteria especially should be passed in exactly as written so the agent can check against them.
+
+**3. Point it at existing patterns**
+
+The codebase has consistent patterns. Tell the agent what to follow:
+
+```
+The pattern for a new route is in backend/src/routes/contributions.js.
+The pattern for a new service is in backend/src/services/contributionService.js.
+Follow the same structure for this new feature.
+```
+
+**4. Ask it to verify acceptance criteria before finishing**
+
+```
+Before you consider this done, go through each acceptance criteria item
+in the issue and confirm whether your implementation satisfies it.
+Flag any that you're unsure about.
+```
+
+**5. Review every diff yourself**
+
+Agents commonly:
+- Add imports for packages that don't exist in `package.json`
+- Skip the error cases listed in acceptance criteria
+- Change code unrelated to the issue
+- Add unnecessary comments or files
+
+Read the diff. Run `npm test`. Don't open the PR until both are clean.
+
+### What not to do
+
+- Don't commit code you haven't read
+- Don't let the agent add files the issue didn't ask for (extra docs, helpers, config)
+- Don't use the agent to write the PR description — write it in your own words
 
 ---
 
 ## Running Tests
 
-### Backend (unit + route tests)
 ```bash
-cd backend && npm test
-```
-Test files live in `backend/src/__tests__/` and cover route handlers, Stellar service helpers, and wallet lifecycle logic.
-
-### Frontend (Vitest + React Testing Library)
-```bash
-cd frontend && npm test
+cd backend  && npm test    # Node test runner + Supertest
+cd frontend && npm test    # Vitest
 ```
 
-### End-to-end (Playwright)
-```bash
-# From repo root — requires Postgres with schema + seed applied (port 5433 via docker-compose)
-npm install
-npx playwright install
-npm run test:e2e
-```
-
-**Run all tests before opening a PR.** CI runs the same suite on every push.
-
----
-
-## Branch Naming
-Pattern: `<type>/<short-kebab-description>`
-
----
-
-## Commit Messages
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-Allowed prefixes: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`, `perf`.
-
----
-
-## Opening a Pull Request
-
-1. **Link the issue** — include `Closes #123` in the PR description
-2. **Run all tests** before pushing
-3. **Keep PRs focused** — one issue per PR; avoid unrelated changes
-4. **Describe what changed** and how a reviewer can test it locally
-5. **Small PRs merge faster** — if your change is large, open an issue first to discuss the approach
-
-PR template checklist:
-- [ ] Tests pass (`npm test` in backend and frontend)
-- [ ] No unrelated files changed
-- [ ] Issue linked in description
-- [ ] Branch follows naming conventions above
-
----
-
-## Good First Issues
-
-New to the codebase? Start here:
-👉 [good first issue](https://github.com/Savitura/crowdpay/labels/good%20first%20issue)
-
-These are scoped, well-described tasks that don't require deep knowledge of the Stellar layer.
+All tests must pass before submitting a PR. CI runs the same suite on every push.
 
 ---
 
 ## Code Style
 
-| Layer    | Command                    | Style                                      |
-|----------|----------------------------|--------------------------------------------|
-| Backend  | `npm run lint --prefix backend` | 2-space indentation, single quotes, semicolons |
-| Frontend | `npm run lint --prefix frontend` | Same — consistent with existing files      |
-
-Match whatever the surrounding file already uses. Run the linter before committing.
+- **Backend**: follow the patterns in `src/routes/` and `src/services/`; 2-space indent; single quotes; no semicolons debate — match what's already there
+- **Frontend**: functional components only; follow the existing page/component structure
+- **Database**: schema changes go in a new `db/migrations/` file — never edit `schema.sql`
+- **Comments**: only add one if the *why* is genuinely non-obvious. Don't describe what the code does
+- **No extra files**: don't add `.md` docs, `NOTES.md`, `TODO.md`, config files, or example scripts unless the issue asks for them
 
 ---
 
-## Questions?
+## Opening a PR
 
-Open a [GitHub Discussion](https://github.com/Savitura/crowdpay/discussions) or comment on the relevant issue. Don't be shy — asking is faster than guessing.
+**Title**: `feat: <short description> (closes #<number>)`
+
+**Body should include**:
+- What you built
+- Any decisions you made that weren't obvious from the issue
+- How a reviewer can test it manually (exact steps)
+
+Always include `Closes #<issue-number>` so the issue auto-closes on merge.
+
+**Checklist before submitting**:
+- [ ] All acceptance criteria in the issue are satisfied
+- [ ] `npm test` passes in both `backend/` and `frontend/`
+- [ ] No files added beyond what the issue required
+- [ ] PR is against `main`, branch is rebased and clean
+
+---
+
+## Questions
+
+Comment on the issue thread. Don't open a new issue to ask about an existing one.

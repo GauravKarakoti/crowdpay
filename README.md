@@ -2,51 +2,53 @@
 
 [![CI](https://github.com/Savitura/crowdpay/actions/workflows/ci.yml/badge.svg)](https://github.com/Savitura/crowdpay/actions/workflows/ci.yml)
 
-**Global funding infrastructure built on Stellar.**
+**Blockchain-powered crowdfunding for the internet.**
 
-CrowdPay is a crowdfunding platform where each campaign gets its own Stellar multisig account. Contributors can fund campaigns in any Stellar asset — path payments handle conversion automatically. Funds are held in cryptographic escrow until both the creator and platform co-sign withdrawals.
+CrowdPay lets creators, startups, and communities raise funds globally. Each campaign gets its own Stellar multisig wallet. Contributions are tracked on-chain, milestone payouts are governed by Soroban smart contracts, and contributors can deposit fiat via MoneyGram's Stellar anchor.
+
+> **Status**: Active development — testnet only.
 
 ---
 
-## Quick start with Docker
+## How it works
 
-```bash
-cp backend/.env.example backend/.env
-docker compose up
+1. Creator launches a campaign with a funding goal, deadline, and optional milestones
+2. Contributors send USDC (or any Stellar asset — path payments handle conversion)
+3. Funds sit in a campaign escrow wallet; the Soroban contract tracks milestone completion
+4. Creator requests withdrawal → platform co-signs → funds released to creator
+5. If the campaign fails to hit its goal, contributors can claim refunds
+
+---
+
+## Architecture
+
 ```
-
-| Service  | URL                        |
-|----------|----------------------------|
-| Frontend | http://localhost:5173      |
-| Backend  | http://localhost:3001      |
-| Postgres | localhost:5432             |
-
-The database schema is applied automatically on first start. Hot-reload is enabled for both backend (nodemon) and frontend (Vite HMR).
-
----
-
-## Features
-
-- **Campaign management** — create, edit, feature, soft-delete, categorize campaigns
-- **Stellar multisig wallets** — per-campaign on-chain accounts with 2-of-2 escrow
-- **Cross-currency contributions** — path payments auto-convert any Stellar asset
-- **Fiat on-ramp** — SEP-24 anchor deposits (MoneyGram, custom anchors)
-- **Milestone-based releases** — release funds in tranches as milestones are met
-- **Platform fee** — configurable basis-point fee on each contribution
-- **Admin moderation** — suspend/restore campaigns, ban/unban users
-- **Webhook notifications** — event-based HTTP callbacks for third-party integrations
-- **Developer API keys** — scoped API keys for external apps
-- **Campaign embedding** — embeddable widget and iframe for external sites
-- **Dispute resolution** — contributors can dispute withdrawals
-- **KYC/identity verification** — Persona integration, configurable per environment
-- **Notifications** — in-app notification dropdown
-- **Internationalization** — English and French (i18next)
-- **Campaign updates** — creators can post updates to backers
-- **Soroban smart contracts** — Rust contracts for escrow and milestone logic
-- **Error tracking** — Sentry integration
-- **Rate limiting** — per-endpoint and global rate limiting
-- **Ledger monitoring** — real-time Horizon streaming for incoming payments
-- **Reconciliation** — periodic on-chain vs. database balance checks
+Browser  ──────────────────────────────────────────────────────────────
+  React 18 + Vite │ React Router │ Freighter wallet │ i18next (en, fr)
+────────────────────────────────────────────────────────────────────────
+                            │ HTTPS
+                            ▼
+Backend  ──────────────────────────────────────────────────────────────
+  Express │ JWT auth │ Winston │ Sentry │ rate-limit │ Swagger docs
+  ┌────────────────────────────────────────────────────────────────┐
+  │ routes: campaigns · contributions · withdrawals · milestones   │
+  │         disputes · users · wallets · notifications · webhooks  │
+  │         anchor · admin · api-keys                              │
+  └────────────────────────────────────────────────────────────────┘
+  ┌────────────────────────────────────────────────────────────────┐
+  │ services: stellarService · sorobanService · anchorService      │
+  │           ledgerMonitor · reconciliation · contributionService │
+  │           emailService · kycProvider · webhookDispatcher       │
+  │           walletSecrets · campaignStatusService                │
+  └────────────────────────────────────────────────────────────────┘
+          │                    │                      │
+          ▼                    ▼                      ▼
+    PostgreSQL          Stellar Horizon         AWS S3 / R2
+    (pgv8/pg)          + Soroban RPC        (campaign images)
+                             │
+                   MoneyGram SEP-24 Anchor
+                   (fiat ↔ USDC rails)
+```
 
 ---
 
@@ -54,107 +56,126 @@ The database schema is applied automatically on first start. Hot-reload is enabl
 
 ```
 crowdpay/
-├── backend/                  # Node.js Express API
+├── backend/
 │   ├── src/
-│   │   ├── config/           # DB, Stellar, env, logger, constants
-│   │   ├── routes/           # REST route handlers (23 files)
-│   │   ├── services/         # Stellar SDK, ledger monitor, wallet, webhooks, KYC, etc.
-│   │   ├── middleware/       # Auth, validation, error handler, request ID, logging
-│   │   ├── utils/            # Async handler, cache
-│   │   ├── scripts/          # Wallet secret rotation
-│   │   └── index.js          # Express app entry point
-│   ├── db/
-│   │   ├── schema.sql        # PostgreSQL schema
-│   │   ├── migrate.js        # Migration runner
-│   │   └── migrations/       # Date-prefixed SQL migrations
-│   ├── docs/                 # Data model, webhook integration, operations docs
-│   └── API.md                # Interactive Swagger / REST API reference
-├── frontend/                 # React (Vite) SPA
+│   │   ├── config/          # env, database, stellar client, logger, constants
+│   │   ├── routes/          # one file per resource (campaigns, contributions, ...)
+│   │   ├── services/        # all business logic and third-party integrations
+│   │   ├── middleware/      # auth, validation, error handler, request ID
+│   │   └── index.js         # Express app entry point
+│   └── db/
+│       ├── schema.sql       # base schema
+│       ├── migrate.js       # migration runner
+│       └── migrations/      # date-prefixed SQL files
+├── frontend/
 │   └── src/
-│       ├── pages/            # 18 page components
-│       ├── components/       # 20 reusable components
-│       ├── context/          # Auth, theme, toast
-│       ├── services/         # API client
-│       ├── hooks/            # Custom hooks
-│       ├── lib/              # Utility modules
-│       ├── locales/          # i18n JSON (en, fr)
-│       └── config/           # Stellar client config
-├── contracts/
-│   ├── stellar/              # Stellar transaction helpers (JS)
-│   └── soroban/              # Soroban smart contracts (Rust)
-└── e2e/                      # Playwright end-to-end tests
+│       ├── pages/           # 18 route-level page components
+│       ├── components/      # reusable UI (CampaignCard, ContributeModal, ...)
+│       ├── context/         # AuthContext, ThemeContext, ToastContext
+│       ├── services/        # typed API client functions
+│       ├── locales/         # i18n JSON (en, fr)
+│       └── config/          # Stellar/Freighter config
+└── contracts/
+    └── soroban/             # Rust Soroban contracts (escrow, milestone release)
 ```
 
 ---
 
-## Tech Stack
+## Quick Start
 
-| Layer | Technology |
-|---|---|
-| Blockchain | Stellar (testnet/mainnet) + Soroban smart contracts |
-| Backend | Node.js, Express |
-| Database | PostgreSQL |
-| Frontend | React, Vite, React Router |
-| Stellar SDK | `@stellar/stellar-sdk`, `@stellar/freighter-api` |
-| Auth | JWT (bcrypt, cookie-parser) |
-| Logging | Winston, Sentry |
-| i18n | i18next, react-i18next |
-| Testing | Node test runner, Vitest, Playwright, Supertest |
-| CI/CD | GitHub Actions |
-| Object storage | S3-compatible (campaign covers) |
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL 14+
-- Docker (optional — for running the stack without manual setup)
-
-### Manual setup
+### With Docker (recommended)
 
 ```bash
-# Clone and install
-cd backend && npm install
-cd ../frontend && npm install
+git clone https://github.com/Savitura/crowdpay
+cd crowdpay
+cp backend/.env.example backend/.env
+docker compose up
+```
 
-# Configure environment
-cd ../backend
-cp .env.example .env
-# Edit .env — add Stellar platform keypair, DB credentials, etc.
+| Service  | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| Backend  | http://localhost:3001 |
+| API docs | http://localhost:3001/api/docs |
 
-# Create database and apply migrations
+The database schema is applied automatically. Hot-reload is active for both processes.
+
+### Without Docker
+
+```bash
+# Prerequisites: Node.js 20+, PostgreSQL 15+
+
+cd backend && npm install && cp .env.example .env
+# Fill in .env (see Environment Variables below)
 npm run migrate:fresh
 
-# Fund your platform testnet account
-node contracts/stellar/campaignWallet.js --setup-platform
+cd ../frontend && npm install
 
-# Start (two terminals)
-cd backend && npm run dev
-cd frontend && npm run dev
+# Two terminals:
+cd backend  && npm run dev   # http://localhost:3001
+cd frontend && npm run dev   # http://localhost:5173
 ```
 
-Backend: http://localhost:3001  
-Frontend: http://localhost:5173  
-API docs: http://localhost:3001/api/docs
+### Environment Variables
 
-### Testing
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_SECRET` | Random 32+ char secret |
+| `STELLAR_NETWORK` | `testnet` or `mainnet` |
+| `STELLAR_HORIZON_URL` | Horizon endpoint URL |
+| `PLATFORM_SECRET_KEY` | Stellar secret key for the platform co-signer wallet |
+| `USDC_ISSUER` | USDC issuer (`GBBD47...` on testnet) |
+| `WALLET_SECRET_LOCAL_KEK` | Base64-encoded key-encryption key for stored secrets |
+| `FRONTEND_URL` | Allowed CORS origin (dev: `http://localhost:5173`) |
+| `SMTP_HOST` / `EMAIL_SERVICE_API_KEY` | Email delivery (optional in dev) |
+| `PERSONA_API_KEY` / `PERSONA_TEMPLATE_ID` | KYC provider (optional in dev) |
+| `AWS_ACCESS_KEY_ID` + S3 vars | Image uploads (optional in dev) |
+
+Generate a platform keypair:
+```bash
+node -e "const {Keypair} = require('@stellar/stellar-sdk'); const kp = Keypair.random(); console.log('Public:', kp.publicKey()); console.log('Secret:', kp.secret());"
+```
+
+Fund it on testnet:
+```bash
+curl "https://friendbot.stellar.org?addr=<PLATFORM_PUBLIC_KEY>"
+```
+
+---
+
+## Testing
 
 ```bash
-# Backend
-cd backend && npm test
-
-# Frontend
-cd frontend && npm test
-
-# End-to-end (Playwright)
-npm run test:e2e
+cd backend  && npm test       # Node test runner + Supertest
+cd frontend && npm test       # Vitest
 ```
+
+---
+
+## Key Concepts
+
+**Campaign wallet**: Each campaign has a dedicated Stellar account with a 2-of-2 multisig threshold — contributions go directly to it. The platform co-signer key is required for withdrawals.
+
+**Soroban escrow**: The Rust contract at `contracts/soroban/` holds contribution records on-chain. Milestone release calls invoke the contract before the backend builds the withdrawal transaction.
+
+**Anchor deposits**: `anchorService.js` implements SEP-10 (web auth) + SEP-24 (interactive deposit) with MoneyGram. Users can deposit cash or USD and receive USDC in their CrowdPay wallet.
+
+**Reconciliation**: `reconciliation.js` runs periodically to compare `raised_amount` in PostgreSQL against the live Stellar account balance. Discrepancies are logged and resolved.
+
+---
+
+## Part of Savitura
+
+- **[Fluxa](https://github.com/Savitura/Fluxa)** — the payment infrastructure layer
+- **[SaviTools](https://github.com/Savitura/Savitools)** — developer tools for Stellar builders
 
 ---
 
 ## Contributing
 
-See **[CONTRIBUTING.md](CONTRIBUTING.md)** for setup, branch naming, commit format, and PR checklist.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+MIT
