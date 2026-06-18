@@ -215,6 +215,8 @@ export const api = {
     request("GET", "/campaigns", null, { query: options }),
   getCampaign: (id) => request("GET", `/campaigns/${id}`),
   getCampaignAnalytics: (id) => request("GET", `/campaigns/${id}/analytics`),
+  getCampaignAnalyticsContributors: (id) => request("GET", `/campaigns/${id}/analytics/contributors`),
+  getUserDashboardAnalytics: () => request("GET", "/users/me/dashboard/analytics"),
   getCampaignEmbed: (id) => request("GET", `/campaigns/${id}/embed`),
   getCampaignBackers: (id) => request("GET", `/campaigns/${id}/backers`),
   getCampaignBalance: (id) => request("GET", `/campaigns/${id}/balance`),
