@@ -14,14 +14,8 @@ const { watchCampaignWallet, addSSEClient, removeSSEClient } = require('../servi
 const { emitWebhookEventForUser, WEBHOOK_EVENTS } = require('../services/webhookDispatcher');
 const { refreshCampaignStatus, refreshActiveCampaignStatuses } = require('../services/campaignStatusService');
 const { queueFailedCampaignRefunds } = require('../services/campaignStatusActions');
-const {
-  deployCampaignContracts,
-  invokeContract,
-  encodeMilestone,
-  nativeToScVal,
-  scvAddressFromString,
-} = require('../services/sorobanService');
-const { sendEmail } = require('../services/emailService');
+const { invokeContract, encodeMilestone, nativeToScVal } = require('../services/sorobanService');
+const { sendEmail, sendTeamMemberInvitedEmail } = require('../services/emailService');
 const { uploadCampaignCoverImage } = require('../services/storage');
 const { isKycRequiredForCampaigns } = require('../services/kycProvider');
 const { listCreatorCampaigns } = require('../services/userDashboardService');
@@ -1000,12 +994,21 @@ router.post('/:id/members/invite', requireAuth, requireCampaignMember('owner', '
   res.status(201).json(member);
 }));
 
-// POST /campaigns/:id/members — legacy alias for invite
-router.post('/:id/members', requireAuth, requireCampaignMember('owner', 'manager'), asyncHandler(async (req, res) => {
-  const { email, role } = req.body;
-  if (!email || !role) return res.status(422).json({ error: 'Email and role are required' });
-  if (!isValidRole(role)) {
-    return res.status(422).json({ error: 'Invalid role. Must be owner, manager, editor, or viewer' });
+  const campaignUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${req.params.id}/invite/${inviteToken}`;
+  try {
+    const { rows: titleRows } = await db.query('SELECT title FROM campaigns WHERE id = $1', [req.params.id]);
+    await sendTeamMemberInvitedEmail({
+      to: email.trim(),
+      memberId: memberRows[0].id,
+      campaignTitle: titleRows[0]?.title,
+      role,
+      inviteUrl: campaignUrl,
+    });
+  } catch (e) {
+    logger.error('Failed to send invite email', {
+      campaign_id: req.params.id,
+      error: e.message || String(e),
+    });
   }
 
   const { rows: campaignRows } = await db.query('SELECT title FROM campaigns WHERE id = $1', [req.params.id]);
