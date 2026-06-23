@@ -207,7 +207,8 @@ export const api = {
   getMyBalance: () => request("GET", "/users/me/balance"),
   getMyStats: () => request("GET", "/users/me/stats"),
   getMyContributions: () => request("GET", "/contributions/mine"),
-  startKyc: () => request("POST", "/users/me/kyc/start"),
+  startKyc: () => request("POST", "/auth/kyc/start"),
+  getKycStatus: () => request("GET", "/auth/kyc/status"),
 
   getMyCampaigns: () => request("GET", "/campaigns/mine"),
   getFeaturedCampaigns: () => request("GET", "/campaigns/featured"),
