@@ -212,6 +212,52 @@ async function refund(contractId, contributorPublicKey) {
   });
 }
 
+/**
+ * Deploy escrow and milestones contracts for a new campaign.
+ * Uses pre-deployed contract IDs from environment variables.
+ */
+async function deployCampaignContracts({
+  creatorPublicKey,
+  platformPublicKey,
+  campaignId,
+  targetAmount,
+  deadlineUnix,
+  assetContractAddress,
+  platformFeeBps,
+  milestones,
+  signerSecret,
+}) {
+  const escrowContractId = process.env.ESCROW_CONTRACT_ID || null;
+  const milestonesContractId = process.env.MILESTONES_CONTRACT_ID || null;
+
+  if (escrowContractId) {
+    await initializeEscrow({
+      contractId: escrowContractId,
+      adminAddress: creatorPublicKey,
+      campaignId,
+      target: targetAmount,
+      deadline: deadlineUnix,
+      assetContractAddress,
+      platformFeeBps,
+      platformFeeRecipientAddress: platformPublicKey,
+      signerSecret,
+    });
+  }
+
+  if (milestonesContractId && milestones && milestones.length) {
+    await initializeMilestones({
+      contractId: milestonesContractId,
+      creatorAddress: creatorPublicKey,
+      platformAddress: platformPublicKey,
+      escrowContractId,
+      milestones,
+      signerSecret,
+    });
+  }
+
+  return { escrowContractId, milestonesContractId };
+}
+
 module.exports = {
   invokeContract,
   invokeContractReadOnly,
@@ -222,11 +268,8 @@ module.exports = {
   getEscrowTotalRaised,
   getEscrowAsset,
   getEscrowPlatformFeeConfig,
-  createContractFromWasmHash,
-  uploadContractWasm,
   deployCampaignContracts,
   encodeMilestone,
-  scvAddressFromString,
   nativeToScVal,
   refund,
 };
