@@ -49,8 +49,9 @@ export default function ContributeModal({
   onClose,
   onSuccess,
   guestFreighterMode = false,
+  onUserUpdate,
 }) {
-  const { user, token } = useAuth();
+  const { user, token, updateUser } = useAuth();
   const [amount, setAmount] = useState('');
   const [sendAsset, setSendAsset] = useState(campaign.asset_type);
   const [paymentMethod, setPaymentMethod] = useState(
@@ -89,6 +90,22 @@ export default function ContributeModal({
     paymentMethod === 'anchor' ? selectedAnchor?.asset?.code || campaign.asset_type : sendAsset;
   const isPathPayment = effectiveSendAsset !== campaign.asset_type;
   const destAmount = amount.trim();
+
+  const kycRequired =
+    user?.kyc_required_for_campaigns ??
+    String(import.meta.env.VITE_KYC_REQUIRED_FOR_CAMPAIGNS ?? 'true').toLowerCase() !== 'false';
+  const needsKyc = kycRequired && user?.kyc_status !== 'verified';
+
+  const handleClose = () => {
+    if (anchorPopupRef.current && !anchorPopupRef.current.closed) {
+      anchorPopupRef.current.close();
+    }
+    setPhase('form');
+    setError('');
+    setQuoteError('');
+    setAmount('');
+    onClose();
+  };
 
   // Fetch anchor info and existing contributions on mount
   useEffect(() => {
@@ -476,13 +493,6 @@ export default function ContributeModal({
     }
   }
 
-  function handleClose() {
-    if (anchorPopupRef.current && !anchorPopupRef.current.closed) {
-      anchorPopupRef.current.close();
-    }
-    onClose();
-  }
-
   return (
     <div className="modal-overlay" style={styles.overlay} onClick={handleClose} role="presentation">
       <div
@@ -498,11 +508,13 @@ export default function ContributeModal({
             <h2 id="contribute-title" style={styles.title}>
               Identity verification required
             </h2>
-            <KycPrompt
-              onUserUpdate={updateUser}
-              title="Verify your identity before contributing"
-            />
-            <button type="button" className="btn-secondary" style={{ marginTop: '1rem', width: '100%' }} onClick={handleClose}>
+            <KycPrompt onUserUpdate={updateUser} title="Verify your identity before contributing" />
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ marginTop: '1rem', width: '100%' }}
+              onClick={handleClose}
+            >
               Close
             </button>
           </>
