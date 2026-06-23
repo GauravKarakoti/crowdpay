@@ -1,6 +1,15 @@
 require('dotenv').config();
 require('./config/env').validateEnv();
 
+const Sentry = require('@sentry/node');
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV || 'development',
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
+  enabled: !!process.env.SENTRY_DSN,
+  integrations: [Sentry.expressIntegration()],
+});
+
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
@@ -14,6 +23,7 @@ const { startLedgerMonitor, getLedgerStreamHealth } = require('./services/ledger
 const { refreshActiveCampaignStatuses } = require('./services/campaignStatusService');
 const { sendAlert } = require('./services/alerting');
 const { assertNoLegacyPlaintextUserWalletSecrets } = require('./services/walletSecrets');
+const db = require('./config/database');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const rateLimit = require('express-rate-limit');
@@ -29,6 +39,7 @@ app.use(
 );
 app.use(express.json({ limit: '50kb' }));
 app.use(cookieParser());
+app.use(Sentry.sentryRequestMiddleware ? Sentry.sentryRequestMiddleware() : (req, res, next) => next());
 app.use(requestIdMiddleware);
 app.use(requestLogger);
 app.use(normalizeErrorResponse);
@@ -77,25 +88,109 @@ const openApiSpec = swaggerJsdoc({
 });
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
+const v1OpenApiSpec = swaggerJsdoc({
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'CrowdPay Public API',
+      version: '1.0.0',
+      description: 'Versioned public API for third-party integrations',
+    },
+    servers: [{ url: '/api/v1' }, { url: '/v1' }],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'cp_live_…',
+        },
+      },
+    },
+  },
+  apis: ['./src/routes/v1.js'],
+});
+
+const v1Router = require('./routes/v1');
+app.use('/api/v1', v1Router);
+app.use('/v1', v1Router);
+app.get('/api/v1/docs/openapi.json', (_req, res) => res.json(v1OpenApiSpec));
+app.get('/v1/docs/openapi.json', (_req, res) => res.json(v1OpenApiSpec));
+app.use('/api/v1/docs', swaggerUi.serve, swaggerUi.setup(v1OpenApiSpec));
+app.use('/v1/docs', swaggerUi.serve, swaggerUi.setup(v1OpenApiSpec));
+
 app.use('/api/auth', require('./routes/auth'));
 // Backwards/alternate compatibility for docs + clients expecting /api/users/register|login.
 app.use('/api/users', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
-app.use('/api/campaigns', require('./routes/campaigns'));
+app.use('/api/invites', require('./routes/invites'));
+app.use("/api/campaigns", require("./routes/campaignUpdates"));
+app.use("/api/campaigns", require("./routes/campaigns"));
 app.use('/api/anchor', require('./routes/anchor'));
 app.use('/api/contributions', require('./routes/contributions'));
 app.use('/api/withdrawals', require('./routes/withdrawals'));
 app.use('/api/stellar/transactions', require('./routes/stellarTransactions'));
 app.use('/api/admin', require('./routes/admin'));
-app.use('/api/api-keys', require('./routes/apiKeys'));
+const apiKeysRouter = require('./routes/apiKeys');
+app.use('/api/api-keys', apiKeysRouter);
+app.use('/api/auth/api-keys', apiKeysRouter);
 app.use('/api/webhooks', require('./routes/webhooks'));
 app.use('/api/milestones', require('./routes/milestones'));
 app.use('/api', require('./routes/disputes'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/emails', require('./routes/emails'));
 
-app.get('/health', (_, res) => res.json({ status: 'ok' }));
+app.get('/health', async (_, res) => {
+  try {
+    await db.query('SELECT 1');
+    res.json({
+      status: 'ok',
+      db: {
+        total: db.totalCount,
+        idle: db.idleCount,
+        waiting: db.waitingCount,
+      },
+    });
+  } catch (err) {
+    res.status(503).json({ status: 'error', error: err.message });
+  }
+});
 app.get('/api/config', (_, res) =>
   res.json({ platform_fee_bps: parseInt(process.env.PLATFORM_FEE_BPS || '0', 10) })
 );
+
+// Public platform stats — used on the hero / landing section.
+// Cached for 60 s; invalidated by ledgerMonitor after each indexed contribution.
+const cache = require('./utils/cache');
+const STATS_CACHE_KEY = 'stats:public';
+app.get('/api/stats', async (_req, res) => {
+  const cached = cache.get(STATS_CACHE_KEY);
+  if (cached) return res.json(cached);
+
+  try {
+    const db = require('./config/database');
+    const [campaigns, raised, contributions] = await Promise.all([
+      db.query(`SELECT COUNT(*)::int AS total
+                FROM campaigns
+                WHERE deleted_at IS NULL AND status NOT IN ('draft', 'failed')`),
+      db.query(`SELECT COALESCE(SUM(raised_amount), 0)::numeric AS total
+                FROM campaigns
+                WHERE deleted_at IS NULL`),
+      db.query(`SELECT COUNT(*)::int AS total FROM contributions`),
+    ]);
+
+    const payload = {
+      total_campaigns: campaigns.rows[0].total,
+      total_raised: parseFloat(raised.rows[0].total),
+      total_contributions: contributions.rows[0].total,
+    };
+
+    cache.set(STATS_CACHE_KEY, payload, 60_000); // 60 s TTL
+    res.json(payload);
+  } catch (err) {
+    logger.error('Failed to fetch public stats', { error: err.message });
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
 
 app.get('/health/ledger', async (_req, res) => {
   try {
@@ -115,6 +210,7 @@ if (process.env.SERVE_FRONTEND === 'true') {
   });
 }
 
+app.use(Sentry.expressErrorHandler());
 app.use(errorHandler);
 
 const { startWebhookRetryPoller } = require('./services/webhookDispatcher');
@@ -163,3 +259,5 @@ bootstrap().catch((err) => {
   sendAlert('Backend bootstrap failed', { error: err.message });
   process.exit(1);
 });
+
+module.exports = app;

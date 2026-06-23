@@ -42,6 +42,11 @@ async function refreshCampaignStatus(campaignId, client) {
     failed: failed[0] || null,
     funded: funded[0] || null,
   };
+
+  if (result.funded) await runStatusActionsForCampaign(result.funded);
+  if (result.failed) await runStatusActionsForCampaign(result.failed);
+
+  return result;
 }
 
 /**
@@ -81,6 +86,13 @@ async function refreshActiveCampaignStatuses() {
       funded_count: funded.length,
       failed_count: failed.length,
     });
+  }
+
+  for (const campaign of funded) {
+    await runStatusActionsForCampaign(campaign);
+  }
+  for (const campaign of failed) {
+    await runStatusActionsForCampaign(campaign);
   }
 
   return { funded, failed };

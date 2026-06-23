@@ -38,8 +38,30 @@ CREATE TABLE campaigns (
                         CHECK (status IN ('active', 'funded', 'in_progress', 'completed', 'closed', 'withdrawn', 'failed')),
   deadline            DATE,
   show_backer_amounts BOOLEAN DEFAULT TRUE,
+  category            TEXT CHECK (category IN (
+                        'technology', 'community', 'arts', 'education',
+                        'environment', 'health', 'business', 'open_source', 'other'
+                      )),
+  min_contribution    NUMERIC(20, 7),
+  max_contribution    NUMERIC(20, 7),
+  max_per_user        NUMERIC(20, 7),
+  featured            BOOLEAN DEFAULT FALSE,
+  featured_at         TIMESTAMPTZ,
+  featured_note       TEXT,
   created_at          TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE TABLE IF NOT EXISTS campaign_updates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  author_id UUID NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS campaign_updates_campaign_created_idx
+  ON campaign_updates (campaign_id, created_at DESC);
 
 CREATE TABLE contributions (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -105,6 +127,8 @@ CREATE UNIQUE INDEX contributions_anchor_transaction_idx
   WHERE anchor_transaction_id IS NOT NULL;
 CREATE INDEX ON campaigns (status);
 CREATE INDEX ON campaigns (creator_id);
+CREATE INDEX ON campaigns (category);
+CREATE INDEX ON campaigns (featured) WHERE featured = TRUE;
 CREATE UNIQUE INDEX users_kyc_provider_reference_idx
   ON users (kyc_provider_reference)
   WHERE kyc_provider_reference IS NOT NULL;
@@ -262,16 +286,7 @@ CREATE INDEX anchor_deposits_user_created_idx
 CREATE INDEX anchor_deposits_campaign_created_idx
   ON anchor_deposits (campaign_id, created_at DESC);
 
-CREATE TABLE campaign_updates (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  campaign_id     UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  author_id       UUID NOT NULL REFERENCES users(id),
-  title           TEXT NOT NULL,
-  body            TEXT NOT NULL,
-  created_at      TIMESTAMPTZ DEFAULT NOW()
-);
 
-CREATE INDEX campaign_updates_campaign_idx ON campaign_updates (campaign_id, created_at DESC);
 
 CREATE TABLE password_reset_tokens (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

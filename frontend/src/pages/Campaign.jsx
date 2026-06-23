@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { Link, useParams, useLocation } from "react-router-dom";
+import React, { useEffect, useState, useRef } from "react";
+import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ContributeModal from "../components/ContributeModal";
+import RelativeTime from "../components/RelativeTime";
 import DisputeModal from "../components/DisputeModal";
 import TransactionHistory from "../components/TransactionHistory";
 import MilestoneTracker from "../components/MilestoneTracker";
@@ -13,6 +14,8 @@ import VerificationBadge from "../components/VerificationBadge";
 import CampaignStatusBadge from "../components/CampaignStatusBadge";
 import { stellarExpertTxUrl } from "../config/stellar";
 import CampaignQRCode from "../components/CampaignQRCode";
+import { getNetwork, signTransaction } from '@stellar/freighter-api';
+import { isConnected, getPublicKey } from "@stellar/freighter-api";
 
 function escapeHtml(text) {
   return text
@@ -39,10 +42,10 @@ function markdownToHtml(markdown) {
 }
 
 function progressColor(pct, status) {
-  if (status === "funded" || pct >= 100) return "#10b981"; // green — goal reached
-  if (status === "closed" || status === "withdrawn") return "#6b7280"; // grey — ended
-  if (pct >= 75) return "#3b82f6"; // blue — nearly there
-  return "#7c3aed"; // default purple
+  if (status === 'funded' || pct >= 100) return '#10b981'; // green — goal reached
+  if (status === 'closed' || status === 'withdrawn' || status === 'refunded' || status === 'failed') return '#6b7280'; // grey — ended
+  if (pct >= 75) return '#3b82f6'; // blue — nearly there
+  return '#7c3aed'; // default purple
 }
 
 function ContributionRow({ c }) {
@@ -87,11 +90,7 @@ function ContributionRow({ c }) {
               {c.sender_public_key.slice(0, 4)}…{c.sender_public_key.slice(-4)}
             </button>
             {" • "}
-            {new Date(c.created_at).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
+            <RelativeTime date={c.created_at} />
           </div>
           {c.refund_status && (
             <div style={styles.refundTag}>
@@ -124,9 +123,12 @@ function ContributionRow({ c }) {
 }
 
 export default function Campaign() {
+  const contributeBtnRef = useRef(null);
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, token } = useAuth();
+
   const [campaign, setCampaign] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [contributions, setContributions] = useState(null);
@@ -136,6 +138,8 @@ export default function Campaign() {
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeSubmitted, setDisputeSubmitted] = useState(false);
   const [contributed, setContributed] = useState(false);
+
+  const [freighterGuestMode, setFreighterGuestMode] = useState(false);
   const [showCreatedBanner, setShowCreatedBanner] = useState(
     !!location.state?.created,
   );
@@ -149,13 +153,11 @@ export default function Campaign() {
   const [updatesError, setUpdatesError] = useState("");
   const [isLive, setIsLive] = useState(false);
   const [members, setMembers] = useState([]);
-  const [isOwner, setIsOwner] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: "", role: "viewer" });
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [showQR, setShowQR] = useState(false);
-  const [showEmbedSection, setShowEmbedSection] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isEditingCampaign, setIsEditingCampaign] = useState(false);
@@ -167,27 +169,69 @@ export default function Campaign() {
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
   const [editLoading, setEditLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("contributions");
+  const [editingUpdateId, setEditingUpdateId] = useState(null);
   const [analytics, setAnalytics] = useState(null);
+  const [refundBusy, setRefundBusy] = useState(false);
+  const [refundError, setRefundError] = useState("");
+  const [refundSuccess, setRefundSuccess] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [hasPendingWithdrawal, setHasPendingWithdrawal] = useState(false);
+  const [referralCode, setReferralCode] = useState(null);
+  const [referralUrl, setReferralUrl] = useState(null);
+  const [referralLeaderboard, setReferralLeaderboard] = useState(null);
+
+  const refParam = new URLSearchParams(location.search).get('ref');
+
+  useEffect(() => {
+    if (!user || !id) return;
+    api.getReferralCode(id).then((data) => {
+      setReferralCode(data.referral_code);
+      setReferralUrl(data.referral_url);
+    }).catch(() => {});
+  }, [user, id]);
+
+  useEffect(() => {
+    if (!isOwner || !id) return;
+    api.getReferralLeaderboard(id).then(setReferralLeaderboard).catch(() => {});
+  }, [isOwner, id]);
+
+  useEffect(() => {
+    document.body.dataset.printUrl = window.location.href;
+    document.body.dataset.printDate = new Date().toLocaleDateString();
+    return () => {
+      delete document.body.dataset.printUrl;
+      delete document.body.dataset.printDate;
+    };
+  }, []);
 
   useEffect(() => {
     setLoadError("");
+    const campaignOpts = refParam ? { ref: refParam } : {};
     api
-      .getCampaign(id, token)
+      .getCampaign(id, campaignOpts)
       .then((data) => {
         setCampaign(data);
-        if (data.user_role === "owner") {
-          setIsOwner(true);
+        const role = data.user_role;
+        if (role === "owner" || role === "manager") {
+          setActiveTab("team");
           api
-            .getCampaignMembers(id, token)
+            .getCampaignMembers(id)
             .then(setMembers)
-            .catch(() => {});
+            .catch(() => setMembers([]));
         } else {
-          setIsOwner(false);
+          setMembers([]);
+        }
+        if (role === "owner" || role === "manager" || role === "viewer") {
+          api
+            .getCampaignAnalytics(id)
+            .then(setAnalytics)
+            .catch(() => setAnalytics(null));
+        } else {
+          setAnalytics(null);
         }
       })
       .catch((err) => setLoadError(err.message || "Could not load campaign."));
@@ -209,10 +253,6 @@ export default function Campaign() {
       .getCampaignUpdates(id, { limit: 20 })
       .then(setUpdates)
       .catch(() => setUpdates([]));
-    api
-      .getCampaignAnalytics(id)
-      .then(setAnalytics)
-      .catch(() => setAnalytics(null));
 
     // Check for pending withdrawals
     if (token) {
@@ -237,6 +277,7 @@ export default function Campaign() {
       "withdrawn",
       "failed",
       "completed",
+      "refunded",
     ].includes(campaign.status);
     if (isCampaignClosed) return;
 
@@ -248,7 +289,7 @@ export default function Campaign() {
       if (document.visibilityState !== "visible") return;
       try {
         const [nextCampaign, nextContributionsData] = await Promise.all([
-          api.getCampaign(id, token),
+          api.getCampaign(id),
           api.getContributions(id, { limit: showAll ? 100 : 10, offset: 0 }),
         ]);
         if (aborted) return;
@@ -341,6 +382,15 @@ export default function Campaign() {
     }
   }, [location.state]);
 
+  async function handleClone() {
+    try {
+      const data = await api.getCloneData(id, token);
+      navigate('/campaigns/new', { state: { prefill: data } });
+    } catch (err) {
+      alert(err.message || 'Failed to fetch campaign clone data');
+    }
+  }
+
   async function handleInviteSubmit(e) {
     e.preventDefault();
     if (!inviteForm.email) {
@@ -351,7 +401,7 @@ export default function Campaign() {
     setInviteError("");
     setInviteSuccess(false);
     try {
-      const newMember = await api.inviteCampaignMember(id, inviteForm, token);
+      const newMember = await api.inviteCampaignMember(id, inviteForm);
       setMembers((prev) => [...prev, newMember]);
       setInviteForm({ email: "", role: "viewer" });
       setInviteSuccess(true);
@@ -364,12 +414,7 @@ export default function Campaign() {
 
   async function handleRoleChange(userId, newRole) {
     try {
-      const updated = await api.updateCampaignMemberRole(
-        id,
-        userId,
-        { role: newRole },
-        token,
-      );
+      const updated = await api.updateCampaignMemberRole(id, userId, { role: newRole });
       setMembers((prev) =>
         prev.map((m) =>
           m.user_id === userId ? { ...m, role: updated.role } : m,
@@ -383,10 +428,31 @@ export default function Campaign() {
   async function handleRemoveMember(userId) {
     if (!confirm("Are you sure you want to remove this member?")) return;
     try {
-      await api.removeCampaignMember(id, userId, token);
+      await api.removeCampaignMember(id, userId);
       setMembers((prev) => prev.filter((m) => m.user_id !== userId));
     } catch (err) {
       alert(err.message || "Failed to remove member");
+    }
+  }
+
+  async function handleResendInvite(memberId) {
+    try {
+      const updated = await api.resendCampaignInvite(id, memberId);
+      setMembers((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, ...updated } : m)),
+      );
+    } catch (err) {
+      alert(err.message || "Failed to resend invitation");
+    }
+  }
+
+  async function handleCancelInvite(memberId) {
+    if (!confirm("Cancel this pending invitation?")) return;
+    try {
+      await api.cancelCampaignInvite(id, memberId);
+      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+    } catch (err) {
+      alert(err.message || "Failed to cancel invitation");
     }
   }
 
@@ -469,6 +535,58 @@ export default function Campaign() {
     }
   }
 
+  async function handleInitiateRefund() {
+    setRefundBusy(true);
+    setRefundError("");
+    setRefundSuccess("");
+    try {
+      const initRes = await api.initiateRefund(campaign.id);
+      const unsignedXdr = initRes.unsigned_xdr;
+
+      let signedXdr = unsignedXdr;
+      if (user?.wallet_type === "freighter") {
+        const network = await getNetwork();
+        if (network?.error) throw new Error("Could not read Freighter network");
+
+        const signed = await signTransaction(unsignedXdr, {
+          networkPassphrase: network?.networkPassphrase,
+          address: user?.wallet_public_key,
+        });
+        if (signed?.error) throw new Error(signed.error?.message || "Freighter signing failed");
+        if (!signed?.signedTxXdr) throw new Error("Freighter did not return a signed transaction");
+
+        const approveRes = await api.approveRefundCreator(campaign.id, { signed_xdr: signed.signedTxXdr });
+        signedXdr = approveRes.signed_xdr;
+      } else {
+        const approveRes = await api.approveRefundCreator(campaign.id, {});
+        signedXdr = approveRes.signed_xdr;
+      }
+
+      let isPlatformApprover = false;
+      try {
+        const capRes = await api.getWithdrawalCapabilities();
+        if (capRes.can_approve_platform) {
+          isPlatformApprover = true;
+        }
+      } catch (err) {
+        // ignore
+      }
+
+      if (isPlatformApprover) {
+        await api.approveRefundPlatform(campaign.id);
+        setRefundSuccess("Campaign contributions successfully refunded!");
+      } else {
+        setRefundSuccess("Refund signed by creator. Awaiting platform release.");
+      }
+
+      const updatedCampaign = await api.getCampaign(campaign.id);
+      setCampaign(updatedCampaign);
+    } catch (err) {
+      setRefundError(err.message || "Failed to initiate refund.");
+    } finally {
+      setRefundBusy(false);
+    }
+  }
   async function handleDeleteCampaign() {
     setDeleteError("");
     if (!campaign) return;
@@ -545,28 +663,103 @@ export default function Campaign() {
     100,
     (campaign.raised_amount / campaign.target_amount) * 100,
   ).toFixed(1);
-  const canPostUpdate = user?.id && campaign.creator_id === user.id;
+  const currentUserId = user?.id || user?.userId;
+  const userRole =
+    campaign.user_role ||
+    (currentUserId && String(campaign.creator_id) === String(currentUserId)
+      ? "owner"
+      : null);
+  const canManageTeam = userRole === "owner" || userRole === "manager";
+  const canChangeRoles = userRole === "owner";
+  const canPostUpdate = userRole === "owner" || userRole === "manager";
+  const canEditCampaign =
+    (userRole === "owner" || userRole === "editor") &&
+    ["active", "funded"].includes(campaign.status);
+  const canViewAnalytics =
+    userRole === "owner" || userRole === "manager" || userRole === "viewer";
+  const isOwner = userRole === "owner";
+  const acceptedMembers = members.filter((m) => m.accepted_at);
+  const pendingInvites = members.filter((m) => !m.accepted_at);
+  const campaignUrl = `${window.location.origin}/campaigns/${id}`;
+  const embedCode = `<iframe src="${window.location.origin}/widget/campaigns/${id}" width="320" height="120" frameborder="0" style="border-radius:10px"></iframe>`;
+
+  function canEditUpdate(update) {
+    return (
+      Date.now() - new Date(update.created_at).getTime() <= 24 * 60 * 60 * 1000
+    );
+  }
+
+  function startEditUpdate(update) {
+    setEditingUpdateId(update.id);
+    setUpdateForm({ title: update.title, body: update.body });
+    setUpdatesError("");
+  }
+
+  function cancelUpdateEdit() {
+    setEditingUpdateId(null);
+    setUpdateForm({ title: "", body: "" });
+    setUpdatesError("");
+  }
+
+  async function handleFreighterContribute() {
+    try {
+      const connected = await isConnected().then((r) => r?.isConnected ?? r).catch(() => false);
+      if (!connected) {
+        window.open('https://www.freighter.app/', '_blank', 'noopener,noreferrer');
+        return;
+      }
+      setFreighterGuestMode(true);
+      setShowModal(true);
+    } catch {
+      window.open('https://www.freighter.app/', '_blank', 'noopener,noreferrer');
+    }
+  }
 
   async function submitUpdate(e) {
     e.preventDefault();
     setUpdatesError("");
     setUpdateBusy(true);
+
     try {
-      await api.postCampaignUpdate(
-        campaign.id,
-        { title: updateForm.title.trim(), body: updateForm.body.trim() },
-        token,
-      );
+      if (editingUpdateId) {
+        const updated = await api.updateCampaignUpdate(
+          campaign.id,
+          editingUpdateId,
+          { title: updateForm.title.trim(), body: updateForm.body.trim() },
+        );
+
+        setUpdates((prev) =>
+          prev.map((item) => (item.id === editingUpdateId ? updated : item)),
+        );
+        setEditingUpdateId(null);
+      } else {
+        const created = await api.postCampaignUpdate(campaign.id, {
+          title: updateForm.title.trim(),
+          body: updateForm.body.trim(),
+        });
+
+        setUpdates((prev) => [created, ...prev]);
+      }
+
       setUpdateForm({ title: "", body: "" });
-      const list = await api.getCampaignUpdates(id, { limit: 20 });
-      setUpdates(list);
     } catch (err) {
-      setUpdatesError(err.message || "Could not publish update");
+      setUpdatesError(err.message || "Could not save update");
     } finally {
       setUpdateBusy(false);
     }
   }
 
+  async function deleteUpdate(updateId) {
+    if (!confirm("Delete this campaign update?")) return;
+
+    setUpdatesError("");
+    try {
+      await api.deleteCampaignUpdate(campaign.id, updateId);
+      setUpdates((prev) => prev.filter((item) => item.id !== updateId));
+    } catch (err) {
+      setUpdatesError(err.message || "Could not delete update");
+    }
+  }
   return (
     <main
       className="container"
@@ -627,6 +820,73 @@ export default function Campaign() {
           Contributions are closed and refunds can be requested.
         </div>
       )}
+      {campaign.status === "refunded" && (
+        <div
+          className="alert alert--success"
+          style={{ marginBottom: "1.25rem" }}
+          role="status"
+        >
+          <strong>Campaign refunded.</strong> This campaign was refunded — all contributions have been returned to their original senders.
+        </div>
+      )}
+      {campaign.status === "failed" &&
+        user &&
+        user.id === campaign.creator_id && (
+          <div
+            style={{
+              background: "var(--color-bg-card, #1e1e2f)",
+              border: "1px solid var(--color-border-light)",
+              borderRadius: "10px",
+              padding: "1.1rem 1.25rem",
+              marginBottom: "1.25rem",
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 0.75rem",
+                fontSize: "0.9rem",
+                color: "var(--color-text-secondary)",
+                lineHeight: 1.55,
+              }}
+            >
+              This campaign did not reach its goal. You can refund all
+              contributors — this will build and sign a Stellar transaction that
+              returns each contributor's exact amount.
+            </p>
+            {refundError && (
+              <p
+                className="alert alert--error"
+                style={{ marginBottom: "0.75rem", fontSize: "0.875rem" }}
+                role="alert"
+              >
+                {refundError}
+              </p>
+            )}
+            {refundSuccess && (
+              <p
+                className="alert alert--success"
+                style={{ marginBottom: "0.75rem", fontSize: "0.875rem" }}
+                role="status"
+              >
+                {refundSuccess}
+              </p>
+            )}
+            <button
+              id="btn-refund-contributors"
+              type="button"
+              className="btn-primary"
+              disabled={refundBusy}
+              onClick={handleInitiateRefund}
+              style={{
+                background: refundBusy ? undefined : "#dc2626",
+                borderColor: refundBusy ? undefined : "#dc2626",
+                fontSize: "0.9rem",
+              }}
+            >
+              {refundBusy ? "Processing refund…" : "Refund contributors"}
+            </button>
+          </div>
+        )}
       {campaign.creator_kyc_status !== "verified" && (
         <div
           className="alert alert--warning"
@@ -694,6 +954,7 @@ export default function Campaign() {
         </div>
         <div
           role="progressbar"
+          className="campaign-progress-bar"
           aria-valuenow={Number(pct)}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -701,37 +962,72 @@ export default function Campaign() {
           style={styles.bar}
         >
           <div
-            style={{ ...styles.fill, width: `${pct}%` }}
+            style={{
+              ...styles.fill,
+              background: progressColor(parseFloat(pct), campaign.status),
+              width: `${pct}%`,
+            }}
             aria-hidden="true"
           />
         </div>
 
-        {user ? (
-          <button
-            type="button"
-            className="btn-primary"
-            style={styles.cta}
-            ref={contributeBtnRef}
-            aria-label={`Contribute to ${campaign.title}`}
-            onClick={() => setShowModal(true)}
-          >
-            Contribute
-          </button>
-        ) : (
-          <p
-            style={{
-              color: "var(--color-text-secondary)",
-              fontSize: "0.9rem",
-              lineHeight: 1.5,
-            }}
-          >
-            Contributions are closed while this campaign is{" "}
+        {campaign.status === 'refunded' ? (
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+            This campaign has been <strong>refunded</strong>. All contributions were returned to their original senders.
+          </p>
+        ) : ['failed', 'closed', 'withdrawn'].includes(campaign.status) ? (
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+            Contributions are closed while this campaign is{' '}
             <strong>{campaign.status}</strong>.
           </p>
+        ) : (
+          user ? (
+            <button
+              type="button"
+              className="btn-primary"
+              style={styles.cta}
+              ref={contributeBtnRef}
+              aria-label={`Contribute to ${campaign.title}`}
+              onClick={() => setShowModal(true)}
+            >
+              Contribute
+            </button>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+              <Link
+                to="/login"
+                state={{ from: `/campaigns/${id}` }}
+                className="btn-primary"
+                style={{ ...styles.cta, textAlign: 'center', textDecoration: 'none', display: 'block' }}
+              >
+                Log in to contribute
+              </Link>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={styles.cta}
+                onClick={handleFreighterContribute}
+              >
+                Contribute with Freighter
+              </button>
+            </div>
+          )
+        )}
+
+        {user && (
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ ...styles.cta, marginTop: "0.75rem" }}
+            onClick={handleClone}
+          >
+            Clone campaign
+          </button>
         )}
       </div>
 
       <div
+        data-no-print
         style={{
           display: "flex",
           gap: "0.65rem",
@@ -756,10 +1052,9 @@ export default function Campaign() {
                 await navigator.share({
                   title: campaign.title,
                   text: campaign.description,
-                  url: window.location.href,
+                  url: referralUrl || window.location.href,
                 });
               } catch (err) {
-                // User cancelled share or error occurred
                 if (err.name !== "AbortError") {
                   console.error("Share failed:", err);
                 }
@@ -781,8 +1076,9 @@ export default function Campaign() {
             gap: "0.5rem",
           }}
           onClick={() => {
+            const shareUrl = referralUrl || window.location.href;
             const text = encodeURIComponent(
-              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${window.location.href}`,
+              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`,
             );
             window.open(
               `https://twitter.com/intent/tweet?text=${text}`,
@@ -804,8 +1100,9 @@ export default function Campaign() {
             gap: "0.5rem",
           }}
           onClick={() => {
+            const shareUrl = referralUrl || window.location.href;
             const text = encodeURIComponent(
-              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${window.location.href}`,
+              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`,
             );
             window.open(`https://wa.me/?text=${text}`, "_blank");
           }}
@@ -829,7 +1126,7 @@ export default function Campaign() {
               transition: "all 0.2s ease",
             }}
             onClick={() => {
-              navigator.clipboard.writeText(window.location.href);
+              navigator.clipboard.writeText(referralUrl || window.location.href);
               setLinkCopied(true);
               setTimeout(() => setLinkCopied(false), 2000);
             }}
@@ -839,18 +1136,17 @@ export default function Campaign() {
         </div>
       </div>
 
-      {/* Edit campaign button - visible only to creator */}
-      {user &&
-        campaign &&
-        user.userId === campaign.creator_id &&
-        ["active", "funded"].includes(campaign.status) && (
-          <div
-            style={{
-              display: "flex",
-              gap: "0.65rem",
-              marginBottom: "1.75rem",
-            }}
-          >
+      {/* Edit campaign — owner or editor */}
+      {user && campaign && canEditCampaign && (
+        <div
+          data-no-print
+          style={{
+            display: "flex",
+            gap: "0.65rem",
+            marginBottom: "1.75rem",
+          }}
+        >
+
             <button
               type="button"
               className="btn-secondary"
@@ -866,7 +1162,7 @@ export default function Campaign() {
             >
               Edit Campaign
             </button>
-            {campaign.status === "active" && !hasPendingWithdrawal && (
+            {isOwner && campaign.status === "active" && !hasPendingWithdrawal && (
               <button
                 type="button"
                 className="btn-secondary"
@@ -891,35 +1187,44 @@ export default function Campaign() {
         <code style={styles.walletKey}>{campaign.wallet_public_key}</code>
       </div>
 
-      <div style={{ marginBottom: "1.75rem" }}>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => setShowQR((v) => !v)}
-        >
-          {showQR ? "Hide QR code" : "Show QR code"}
+      <div style={{ marginBottom: '1.75rem' }}>
+        <button type="button" className="btn-secondary" data-no-print onClick={() => setShowQR((v) => !v)}>
+          {showQR ? 'Hide QR code' : 'Show QR code'}
         </button>
         {showQR && (
-          <div
-            style={{
-              marginTop: "1rem",
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <CampaignQRCode
-              url={`${window.location.origin}/campaigns/${id}`}
-              size={200}
-            />
+          <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'center' }}>
+            <CampaignQRCode url={referralUrl || `${window.location.origin}/campaigns/${id}`} size={200} />
           </div>
         )}
       </div>
+
+      <details style={{ ...styles.card, marginTop: "-0.75rem" }}>
+        <summary style={styles.embedSummary}>
+          Embed on your site
+        </summary>
+        <pre style={{ ...styles.embedCode, marginTop: "0.75rem" }}>
+          {embedCode}
+        </pre>
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard.writeText(embedCode).then(() => {
+              setEmbedCopied(true);
+              setTimeout(() => setEmbedCopied(false), 2000);
+            });
+          }}
+          className="btn-secondary"
+          style={{ marginTop: "0.75rem", fontSize: "0.85rem", minHeight: "auto" }}
+        >
+          {embedCopied ? "Copied!" : "Copy snippet"}
+        </button>
+      </details>
 
       {/* Report a problem — visible to contributors who have backed this campaign */}
       {user &&
         contributions?.some((c) => c.sender_public_key) &&
         campaign.creator_id !== user.id && (
-          <div style={{ marginBottom: "1.25rem" }}>
+          <div style={{ marginBottom: "1.25rem" }} data-no-print>
             {disputeSubmitted ? (
               <p className="alert alert--success" role="status">
                 Your dispute has been submitted. The platform team will review
@@ -946,7 +1251,7 @@ export default function Campaign() {
           </div>
         )}
       {canPostUpdate && (
-        <div style={styles.card}>
+        <div style={styles.card} data-no-print>
           <div
             style={{
               display: "flex",
@@ -1063,23 +1368,23 @@ export default function Campaign() {
       )}
 
       {token && (
-        <div id="withdrawals">
-          <WithdrawalsSection
-            campaign={campaign}
-            milestones={milestones}
-            user={user}
-            token={token}
-            onReleased={() => {
-              api
-                .getCampaign(id)
-                .then(setCampaign)
-                .catch(() => {});
-              api
-                .getMilestones(id)
-                .then(setMilestones)
-                .catch(() => {});
-            }}
-          />
+        <div id="withdrawals" data-no-print>
+        <WithdrawalsSection
+          campaign={campaign}
+          milestones={milestones}
+          user={user}
+          token={token}
+          onReleased={() => {
+            api
+              .getCampaign(id)
+              .then(setCampaign)
+              .catch(() => {});
+            api
+              .getMilestones(id)
+              .then(setMilestones)
+              .catch(() => {});
+          }}
+        />
         </div>
       )}
 
@@ -1092,9 +1397,56 @@ export default function Campaign() {
         milestones={milestones}
         assetType={campaign.asset_type}
       />
-      {isOwner && (
-        <div style={{ marginBottom: "2rem" }}>
-          <h2 style={styles.sectionTitle}>Team Management</h2>
+      {canManageTeam && (
+        <div style={{ marginBottom: "2rem" }} data-no-print>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              marginBottom: "1rem",
+              borderBottom: "1px solid var(--color-border-lighter)",
+              paddingBottom: "0.5rem",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveTab("team")}
+              style={{
+                background: activeTab === "team" ? "var(--color-accent)" : "transparent",
+                color: activeTab === "team" ? "#fff" : "var(--color-text-primary)",
+                border: "1px solid var(--color-border-light)",
+                borderRadius: "6px",
+                padding: "0.4rem 0.9rem",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+              }}
+            >
+              Team
+            </button>
+            {canViewAnalytics && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("analytics")}
+                style={{
+                  background: activeTab === "analytics" ? "var(--color-accent)" : "transparent",
+                  color: activeTab === "analytics" ? "#fff" : "var(--color-text-primary)",
+                  border: "1px solid var(--color-border-light)",
+                  borderRadius: "6px",
+                  padding: "0.4rem 0.9rem",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                }}
+              >
+                Analytics
+              </button>
+            )}
+          </div>
+
+          {(activeTab !== "analytics") && (
+          <>
+          <h2 style={styles.sectionTitle}>Team</h2>
           <div className="campaign-card" style={{ marginBottom: "1.5rem" }}>
             <strong style={{ marginBottom: "0.75rem", display: "block" }}>
               Invite Team Member
@@ -1130,7 +1482,7 @@ export default function Campaign() {
                   style={{ width: "100%" }}
                 />
               </div>
-              <div style={{ width: "120px" }}>
+              <div style={{ width: "140px" }}>
                 <label
                   style={{
                     fontSize: "0.85rem",
@@ -1149,8 +1501,9 @@ export default function Campaign() {
                   style={{ width: "100%", padding: "0.5rem" }}
                 >
                   <option value="viewer">Viewer</option>
+                  <option value="editor">Editor</option>
                   <option value="manager">Manager</option>
-                  <option value="owner">Owner</option>
+                  {canChangeRoles && <option value="owner">Owner</option>}
                 </select>
               </div>
               <button
@@ -1180,17 +1533,87 @@ export default function Campaign() {
             )}
           </div>
 
+          {pendingInvites.length > 0 && (
+            <div className="campaign-card" style={{ marginBottom: "1.5rem" }}>
+              <strong style={{ marginBottom: "0.75rem", display: "block" }}>
+                Pending Invitations
+              </strong>
+              <div style={{ display: "grid", gap: "0.75rem" }}>
+                {pendingInvites.map((member) => (
+                  <div
+                    key={member.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "1rem",
+                      flexWrap: "wrap",
+                      borderBottom: "1px solid var(--color-border-lighter)",
+                      paddingBottom: "0.5rem",
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 600 }}>{member.email}</span>
+                      <span
+                        style={{
+                          marginLeft: "0.5rem",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          color: "var(--color-warning-text)",
+                          background: "var(--color-warning-bg)",
+                          padding: "0.15rem 0.45rem",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        {member.role}
+                      </span>
+                      {member.invite_expires_at && (
+                        <div style={{ fontSize: "0.75rem", color: "var(--color-text-hint)", marginTop: "0.25rem" }}>
+                          Expires {new Date(member.invite_expires_at).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => handleResendInvite(member.id)}
+                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.85rem" }}
+                      >
+                        Resend
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => handleCancelInvite(member.id)}
+                        style={{
+                          padding: "0.25rem 0.5rem",
+                          fontSize: "0.85rem",
+                          color: "var(--color-status-error)",
+                          borderColor: "var(--color-status-error)",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="campaign-card">
             <strong style={{ marginBottom: "0.75rem", display: "block" }}>
-              Current Team
+              Team Members
             </strong>
-            {members.length === 0 ? (
+            {acceptedMembers.length === 0 ? (
               <p style={{ color: "var(--color-text-muted)" }}>
-                No team members yet.
+                No accepted team members yet.
               </p>
             ) : (
               <div style={{ display: "grid", gap: "0.75rem" }}>
-                {members.map((member) => (
+                {acceptedMembers.map((member) => (
                   <div
                     key={member.id}
                     style={{
@@ -1215,17 +1638,20 @@ export default function Campaign() {
                           ({member.user_name})
                         </span>
                       )}
-                      <div
+                      <span
                         style={{
+                          marginLeft: "0.5rem",
                           fontSize: "0.75rem",
-                          color: member.accepted_at
-                            ? "var(--color-success-text)"
-                            : "var(--color-warning-text)",
-                          fontWeight: 600,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          color: "var(--color-accent)",
+                          background: "var(--color-accent-bg, rgba(99,102,241,0.1))",
+                          padding: "0.15rem 0.45rem",
+                          borderRadius: "4px",
                         }}
                       >
-                        {member.accepted_at ? "Accepted" : "Pending"}
-                      </div>
+                        {member.role}
+                      </span>
                     </div>
                     <div
                       style={{
@@ -1234,40 +1660,66 @@ export default function Campaign() {
                         alignItems: "center",
                       }}
                     >
-                      <select
-                        value={member.role}
-                        onChange={(e) =>
-                          handleRoleChange(member.user_id, e.target.value)
-                        }
-                        disabled={
-                          !member.user_id ||
-                          String(member.user_id) === String(user?.id)
-                        }
-                        style={{ padding: "0.25rem", fontSize: "0.85rem" }}
-                      >
-                        <option value="viewer">Viewer</option>
-                        <option value="manager">Manager</option>
-                        <option value="owner">Owner</option>
-                      </select>
-                      <button
-                        className="btn-secondary"
-                        onClick={() => handleRemoveMember(member.user_id)}
-                        disabled={String(member.user_id) === String(user?.id)}
-                        style={{
-                          padding: "0.25rem 0.5rem",
-                          fontSize: "0.85rem",
-                          color: "var(--color-status-error)",
-                          borderColor: "var(--color-status-error)",
-                        }}
-                      >
-                        Remove
-                      </button>
+                      {canChangeRoles && member.user_id ? (
+                        <select
+                          value={member.role}
+                          onChange={(e) =>
+                            handleRoleChange(member.user_id, e.target.value)
+                          }
+                          disabled={String(member.user_id) === String(user?.id)}
+                          style={{ padding: "0.25rem", fontSize: "0.85rem" }}
+                        >
+                          <option value="viewer">Viewer</option>
+                          <option value="editor">Editor</option>
+                          <option value="manager">Manager</option>
+                          <option value="owner">Owner</option>
+                        </select>
+                      ) : (
+                        <span style={{ fontSize: "0.85rem", color: "var(--color-text-hint)" }}>
+                          {member.role}
+                        </span>
+                      )}
+                      {(canChangeRoles || String(member.user_id) === String(user?.id)) &&
+                        member.user_id && (
+                        <button
+                          className="btn-secondary"
+                          onClick={() => handleRemoveMember(member.user_id)}
+                          disabled={
+                            canChangeRoles &&
+                            String(member.user_id) === String(user?.id) &&
+                            member.role === "owner"
+                          }
+                          style={{
+                            padding: "0.25rem 0.5rem",
+                            fontSize: "0.85rem",
+                            color: "var(--color-status-error)",
+                            borderColor: "var(--color-status-error)",
+                          }}
+                        >
+                          {String(member.user_id) === String(user?.id) ? "Leave" : "Remove"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+          </>
+          )}
+        </div>
+      )}
+
+      {canViewAnalytics && !canManageTeam && activeTab !== "analytics" && (
+        <div style={{ marginBottom: "1rem" }} data-no-print>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setActiveTab("analytics")}
+            style={{ fontSize: "0.85rem" }}
+          >
+            View Analytics
+          </button>
         </div>
       )}
 
@@ -1277,9 +1729,10 @@ export default function Campaign() {
           onSubmit={submitUpdate}
           className="campaign-card"
           style={{ marginBottom: "1rem" }}
+          data-no-print
         >
           <strong style={{ marginBottom: "0.5rem", display: "block" }}>
-            Post update
+            {editingUpdateId ? "Edit update" : "Post update"}
           </strong>
           <input
             placeholder="Update title"
@@ -1300,28 +1753,34 @@ export default function Campaign() {
             required
           />
           {updatesError && (
-            <p className="alert alert--error" style={{ marginTop: "0.5rem" }}>
+            <div style={{ color: "var(--color-status-error)", fontSize: "0.85rem", marginTop: "0.5rem" }}>
               {updatesError}
-            </p>
+            </div>
           )}
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={updateBusy}
-            style={{ marginTop: "0.5rem" }}
-          >
-            {updateBusy ? "Posting..." : "Post update"}
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={updateBusy}
+            >
+              {updateBusy ? "Saving..." : editingUpdateId ? "Save changes" : "Post"}
+            </button>
+            {editingUpdateId && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setEditingUpdateId(null);
+                  setUpdateForm({ title: "", body: "" });
+                  setUpdatesError("");
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
       )}
-      {updates.length === 0 ? (
-        <p style={{ color: "var(--color-text-muted)", marginBottom: "1rem" }}>
-          No updates posted yet.
-        </p>
-      ) : (
-        <div
-          style={{ display: "grid", gap: "0.75rem", marginBottom: "1.25rem" }}
-        >
           {updates.map((update) => (
             <article key={update.id} className="campaign-card">
               <div
@@ -1340,7 +1799,7 @@ export default function Campaign() {
                   }}
                 >
                   {update.author_name} •{" "}
-                  {new Date(update.created_at).toLocaleString()}
+                  <RelativeTime date={update.created_at} />
                 </span>
               </div>
               <div
@@ -1355,11 +1814,10 @@ export default function Campaign() {
               />
             </article>
           ))}
-        </div>
-      )}
+
 
       {/* Analytics Section */}
-      {analytics && (
+      {canViewAnalytics && analytics && (canManageTeam ? activeTab === "analytics" : true) && (
         <div style={{ marginBottom: "2rem" }}>
           <h2 style={styles.sectionTitle}>Analytics</h2>
           {!analytics.dailyTotals || analytics.dailyTotals.length === 0 ? (
@@ -1458,6 +1916,40 @@ export default function Campaign() {
         </div>
       )}
 
+      {isOwner && referralLeaderboard && referralLeaderboard.length > 0 && (
+        <div style={{ marginBottom: "2rem" }}>
+          <h2 style={styles.sectionTitle}>Referral Leaderboard</h2>
+          <div className="campaign-card">
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid var(--color-border)", textAlign: "left" }}>
+                  <th style={{ padding: "0.5rem 0.75rem" }}>#</th>
+                  <th style={{ padding: "0.5rem 0.75rem" }}>Referrer</th>
+                  <th style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>Clicks</th>
+                  <th style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>Contributions</th>
+                  <th style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>Conv. Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {referralLeaderboard.map((r, i) => (
+                  <tr key={r.referral_code} style={{ borderBottom: "1px solid var(--color-border-lighter)" }}>
+                    <td style={{ padding: "0.5rem 0.75rem", color: "var(--color-text-hint)" }}>{i + 1}</td>
+                    <td style={{ padding: "0.5rem 0.75rem", fontWeight: 600 }}>{r.referrer_name}</td>
+                    <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>{r.click_count}</td>
+                    <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>{r.contribution_count}</td>
+                    <td style={{ padding: "0.5rem 0.75rem", textAlign: "center" }}>
+                      {r.click_count > 0
+                        ? `${((r.contribution_count / r.click_count) * 100).toFixed(0)}%`
+                        : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <h2 style={styles.sectionTitle}>
         Backer Wall {contributions !== null ? `(${totalContributions})` : ""}
         {isLive && (
@@ -1473,18 +1965,150 @@ export default function Campaign() {
         <div style={styles.emptyBackers}>
           <p>Be the first to back this!</p>
           <p
-            style={{
-              fontSize: "0.9rem",
-              color: "var(--color-text-secondary)",
-              marginTop: "0.25rem",
-            }}
+            style={{ fontSize: "0.9rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}
           >
             Every contribution counts towards making this goal a reality.
           </p>
         </div>
       ) : (
         <>
-          <div style={styles.list}>
+          <div style={styles.list} className="contributions-list">
+            {contributions.map((c) => (
+              <ContributionRow key={c.id} c={c} />
+            ))}
+          </div>
+          {totalContributions > 10 && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowAll((prev) => !prev)}
+                style={{ padding: '0.5rem 1.5rem', fontSize: '0.9rem', cursor: 'pointer' }}
+              >
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={updateBusy}
+                >
+                  {updateBusy
+                    ? "Saving..."
+                    : editingUpdateId
+                      ? "Save update"
+                      : "Post update"}
+                </button>
+
+                {editingUpdateId && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={cancelUpdateEdit}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+
+          {updates.length === 0 ? (
+            <p
+              style={{ color: "var(--color-text-muted)", marginBottom: "1rem" }}
+            >
+              No updates yet — the creator hasn't posted anything.
+            </p>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gap: "0.75rem",
+                marginBottom: "1.25rem",
+              }}
+            >
+              {updates.map((update) => (
+                <article key={update.id} className="campaign-card">
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "0.5rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <strong>{update.title}</strong>
+                    <span
+                      style={{
+                        color: "var(--color-text-hint)",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      {update.author_name} •{" "}
+                      <RelativeTime date={update.created_at} />
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
+                      color: "var(--color-text-primary)",
+                      lineHeight: 1.5,
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: markdownToHtml(update.body),
+                    }}
+                  />
+
+                  {canPostUpdate && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        marginTop: "0.75rem",
+                      }}
+                    >
+                      {canEditUpdate(update) && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => startEditUpdate(update)}
+                          style={{
+                            fontSize: "0.85rem",
+                            padding: "0.4rem 0.75rem",
+                          }}
+                        >
+                          Edit
+                        </button>
+                      )}
+
+
+          <h2 style={styles.sectionTitle}>
+            Backer Wall{" "}
+            {contributions !== null ? `(${totalContributions})` : ""}
+            {isLive && (
+              <span style={styles.liveIndicator} title="Live updates active">
+                <span style={styles.liveDot} />
+                Live
+              </span>
+            )}
+          </h2>
+
+          {contributions === null ? (
+            <ContributionListSkeleton />
+          ) : contributions.length === 0 ? (
+            <div style={styles.emptyBackers}>
+              <p>Be the first to back this!</p>
+              <p
+                style={{
+                  fontSize: "0.9rem",
+                  color: "var(--color-text-secondary)",
+                  marginTop: "0.25rem",
+                }}
+              >
+                Every contribution counts towards making this goal a reality.
+              </p>
+            </div>
+      ) : (
+        <>
+          <div style={styles.list} className="contributions-list">
             {contributions.map((c) => (
               <ContributionRow key={c.id} c={c} />
             ))}
@@ -1510,15 +2134,18 @@ export default function Campaign() {
                 {showAll ? "Show less" : `Show all (${totalContributions})`}
               </button>
             </div>
+              )}
+            </>
           )}
-        </>
-      )}
+
 
       {showModal && (
         <ContributeModal
           campaign={campaign}
+          guestFreighterMode={freighterGuestMode}
           onClose={() => {
             setShowModal(false);
+            setFreighterGuestMode(false);
             contributeBtnRef.current?.focus();
           }}
           onSuccess={() => setContributed((v) => !v)}
@@ -2125,6 +2752,12 @@ const styles = {
     wordBreak: "break-all",
     paddingRight: "5rem",
   },
+  embedSummary: {
+    cursor: "pointer",
+    fontSize: "0.85rem",
+    color: "var(--color-accent)",
+    fontWeight: 600,
+  },
   embedPreview: {
     background: "var(--color-surface)",
     border: "1px solid var(--color-border-light)",
@@ -2152,5 +2785,17 @@ const styles = {
     fontSize: "0.9rem",
     fontWeight: 800,
     flexShrink: 0,
+  },
+  tabs: {
+    display: "flex",
+    gap: "0.75rem",
+    marginBottom: "1rem",
+    borderBottom: "1px solid var(--color-border-light)",
+    paddingBottom: "0.75rem",
+  },
+  tabButton: {
+    flex: 1,
+    fontSize: "0.9rem",
+    justifyContent: "center",
   },
 };
