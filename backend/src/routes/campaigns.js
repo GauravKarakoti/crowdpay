@@ -994,34 +994,6 @@ router.post('/:id/members/invite', requireAuth, requireCampaignMember('owner', '
   res.status(201).json(member);
 }));
 
-  const campaignUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/campaigns/${req.params.id}/invite/${inviteToken}`;
-  try {
-    const { rows: titleRows } = await db.query('SELECT title FROM campaigns WHERE id = $1', [req.params.id]);
-    await sendTeamMemberInvitedEmail({
-      to: email.trim(),
-      memberId: memberRows[0].id,
-      campaignTitle: titleRows[0]?.title,
-      role,
-      inviteUrl: campaignUrl,
-    });
-  } catch (e) {
-    logger.error('Failed to send invite email', {
-      campaign_id: req.params.id,
-      error: e.message || String(e),
-    });
-  }
-
-  const { rows: campaignRows } = await db.query('SELECT title FROM campaigns WHERE id = $1', [req.params.id]);
-  const { member } = await createCampaignInvite({
-    campaignId: req.params.id,
-    email,
-    role,
-    invitedByUserId: req.user.userId,
-    campaignTitle: campaignRows[0]?.title,
-  });
-  res.status(201).json(member);
-}));
-
 // GET /campaigns/:id/members — team list (owner/manager)
 router.get('/:id/members', requireAuth, requireCampaignMember('owner', 'manager'), asyncHandler(async (req, res) => {
   const { rows } = await db.query(

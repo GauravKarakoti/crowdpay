@@ -195,11 +195,6 @@ export default function Campaign() {
   }, [user, id]);
 
   useEffect(() => {
-    if (!isOwner || !id) return;
-    api.getReferralLeaderboard(id).then(setReferralLeaderboard).catch(() => {});
-  }, [isOwner, id]);
-
-  useEffect(() => {
     document.body.dataset.printUrl = window.location.href;
     document.body.dataset.printDate = new Date().toLocaleDateString();
     return () => {
@@ -265,6 +260,18 @@ export default function Campaign() {
         .catch(() => setHasPendingWithdrawal(false));
     }
   }, [id, token, contributed, showAll]);
+
+  useEffect(() => {
+    if (!campaign || !id || !user) return;
+    const currentUserId = user.id || user.userId;
+    const resolvedRole =
+      campaign.user_role ||
+      (currentUserId && String(campaign.creator_id) === String(currentUserId)
+        ? "owner"
+        : null);
+    if (resolvedRole !== "owner") return;
+    api.getReferralLeaderboard(id).then(setReferralLeaderboard).catch(() => {});
+  }, [campaign, id, user]);
 
   useEffect(() => {
     if (!id) return;
