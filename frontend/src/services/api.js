@@ -215,6 +215,7 @@ export const api = {
   getCampaigns: (options = {}) =>
     request("GET", "/campaigns", null, { query: options }),
   getCampaign: (id, options = {}) => request("GET", `/campaigns/${id}`, null, { query: options }),
+  getContractStatus: (id) => request("GET", `/campaigns/${id}/contract-status`),
   getCampaignAnalytics: (id) => request("GET", `/campaigns/${id}/analytics`),
   getCampaignAnalyticsContributors: (id) => request("GET", `/campaigns/${id}/analytics/contributors`),
   getUserDashboardAnalytics: () => request("GET", "/users/me/dashboard/analytics"),
@@ -299,6 +300,8 @@ export const api = {
   initiateRefund: (id) => request('POST', `/campaigns/${id}/refund/initiate`, {}),
   approveRefundCreator: (id, body) => request('POST', `/campaigns/${id}/refund/approve/creator`, body || {}),
   approveRefundPlatform: (id) => request('POST', `/campaigns/${id}/refund/approve/platform`, {}),
+  requestContributionRefund: (contributionId) =>
+    request('POST', `/contributions/${contributionId}/refund`, {}),
 
   getWithdrawalCapabilities: () => request("GET", "/withdrawals/capabilities"),
   listWithdrawals: (campaignId) =>

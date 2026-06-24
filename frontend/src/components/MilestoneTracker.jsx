@@ -8,8 +8,23 @@ function statusTone(status) {
   return { bg: 'var(--color-surface)', fg: 'var(--color-text-secondary)', label: 'Pending' };
 }
 
-export default function MilestoneTracker({ milestones, assetType }) {
+export default function MilestoneTracker({ milestones, assetType, contractMilestones }) {
   if (!milestones?.length) return null;
+
+  function onChainStatusFor(milestone, index) {
+    const fromContract = contractMilestones?.find(
+      (item) => item.index === milestone.sort_order || item.index === index,
+    );
+    return fromContract?.on_chain_status || null;
+  }
+
+  function onChainStatusLabel(status) {
+    if (!status) return null;
+    if (status === 'released') return 'Released on-chain';
+    if (status === 'submitted') return 'Submitted on-chain';
+    if (status === 'rejected') return 'Rejected on-chain';
+    return 'Pending on-chain';
+  }
 
   return (
     <section style={{ marginTop: '1.5rem' }} aria-label="Milestone progress">
@@ -19,6 +34,8 @@ export default function MilestoneTracker({ milestones, assetType }) {
       <div style={{ display: 'grid', gap: '0.75rem' }}>
         {milestones.map((milestone, index) => {
           const tone = statusTone(milestone.status);
+          const chainStatus = onChainStatusFor(milestone, index);
+          const chainLabel = onChainStatusLabel(chainStatus);
           return (
             <article key={milestone.id} className="campaign-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -45,6 +62,21 @@ export default function MilestoneTracker({ milestones, assetType }) {
                       }}
                     >
                       <span aria-hidden="true">⛓️</span> On-chain
+                    </div>
+                  )}
+                  {chainLabel && (
+                    <div
+                      title="On-chain release status from Soroban contract"
+                      style={{
+                        background: chainStatus === 'released' ? 'var(--color-success-bg)' : 'var(--color-info-bg)',
+                        color: chainStatus === 'released' ? 'var(--color-success-text)' : 'var(--color-info-text)',
+                        borderRadius: '999px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        padding: '0.25rem 0.6rem',
+                      }}
+                    >
+                      {chainLabel}
                     </div>
                   )}
                   <div

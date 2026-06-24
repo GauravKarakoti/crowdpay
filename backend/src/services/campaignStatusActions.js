@@ -14,7 +14,7 @@ const {
 } = require('./webhookDispatcher');
 const { buildWithdrawalTransaction } = require('./stellarService');
 const { insertWithdrawalPendingSignatures } = require('./stellarTransactionService');
-const { invokeContract, requestRefund: contractRequestRefund } = require('./sorobanService');
+const { invokeContract, triggerRefund } = require('./sorobanService');
 
 function frontendBaseUrl() {
   return (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
@@ -268,8 +268,8 @@ async function queueFailedCampaignRefunds(campaignId, actorUserId) {
       );
       for (const contribution of contributions) {
         try {
-          await contractRequestRefund({
-            contractId: campaign.escrow_contract_id,
+          await triggerRefund({
+            escrowContractId: campaign.escrow_contract_id,
             contributorAddress: contribution.sender_public_key,
             signerSecret: process.env.PLATFORM_SECRET_KEY,
           });

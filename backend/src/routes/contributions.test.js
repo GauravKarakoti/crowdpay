@@ -204,7 +204,7 @@ function buildApp({ queryImpl, stellarImpl, stellarTxImpl }) {
     },
     '../services/contributionService': contributionServiceStub,
     '../services/sorobanService': {
-      requestRefund: async () => null,
+      triggerRefund: async () => null,
     },
     '../middleware/auth': {
       requireAuth: (req, _res, next) => {
