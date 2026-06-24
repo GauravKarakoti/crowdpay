@@ -44,12 +44,28 @@ function friendlyFreighterError(err, fallback) {
   return fallback;
 }
 
+function matchTier(tiers, amount) {
+  if (!tiers || !Array.isArray(tiers) || !amount) return null;
+  const numAmount = parseFloat(amount);
+  if (isNaN(numAmount)) return null;
+
+  const eligible = tiers.filter(
+    (t) => numAmount >= parseFloat(t.min_amount) && !t.sold_out
+  );
+
+  if (eligible.length === 0) return null;
+
+  eligible.sort((a, b) => parseFloat(b.min_amount) - parseFloat(a.min_amount));
+  return eligible[0];
+}
+
 export default function ContributeModal({
   campaign,
   onClose,
   onSuccess,
   guestFreighterMode = false,
   onUserUpdate,
+  tiers = [],
 }) {
   const { user, token, updateUser } = useAuth();
   const [amount, setAmount] = useState('');
@@ -996,7 +1012,7 @@ export default function ContributeModal({
             </p>
             {unlockedTier && (
               <p className="alert alert--success" style={{ marginBottom: '1rem', fontSize: '0.9rem' }} role="status">
-                🎉 You've unlocked: <strong>{unlockedTier.title}</strong>
+                🎉 {"You've"} unlocked: <strong>{unlockedTier.title}</strong>
               </p>
             )}
             {result?.tx_hash && (

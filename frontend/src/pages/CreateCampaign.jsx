@@ -967,7 +967,7 @@ export default function CreateCampaign() {
             <div className="campaign-card" style={{ marginTop: '1.75rem', marginBottom: '1rem' }}>
               <strong>Reward tiers <span style={{ fontWeight: 500, color: 'var(--color-text-muted)' }}>(optional)</span></strong>
               <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.88rem', lineHeight: 1.5, marginTop: '0.35rem' }}>
-                Offer backer perks at set contribution levels. Backers who contribute at or above a tier's minimum unlock it. Up to 10 tiers.
+                Offer backer perks at set contribution levels. Backers who contribute at or above a {"tier's"} minimum unlock it. Up to 10 tiers.
               </p>
             </div>
 

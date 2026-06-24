@@ -143,6 +143,7 @@ export default function Campaign() {
   const [coverUploadError, setCoverUploadError] = useState(location.state?.coverUploadError || '');
   const [updates, setUpdates] = useState([]);
   const [milestones, setMilestones] = useState([]);
+  const [tiers, setTiers] = useState([]);
   const [updateForm, setUpdateForm] = useState({ title: '', body: '' });
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updatesError, setUpdatesError] = useState('');
@@ -930,7 +931,7 @@ export default function Campaign() {
                   <span style={{ ...styles.small, fontWeight: 700, marginLeft: "auto" }}>
                     {tier.sold_out
                       ? "Sold out"
-                      : tier.remaining == null
+                      : tier.remaining === null || tier.remaining === undefined
                       ? "Unlimited backers"
                       : `${Number(tier.remaining).toLocaleString()} remaining`}
                   </span>
