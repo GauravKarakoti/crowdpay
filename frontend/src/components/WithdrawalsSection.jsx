@@ -71,7 +71,8 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
       return;
     }
     setLoadingBalance(true);
-    api.getCampaignBalance(campaign.id)
+    api
+      .getCampaignBalance(campaign.id)
       .then((b) => {
         setLiveBalance(parseFloat(b[campaign.asset_type] || '0'));
         setLoadingBalance(false);
@@ -262,8 +263,8 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
       <h2 style={styles.h2}>Manual fund release</h2>
       <p style={styles.intro}>
         Funds leave the campaign wallet only after <strong>you</strong> (creator) and{' '}
-        <strong>CrowdPay</strong> (platform) both approve the same transaction. Every step is
-        logged for review.
+        <strong>CrowdPay</strong> (platform) both approve the same transaction. Every step is logged
+        for review.
       </p>
 
       {hasMilestonePlan && (
@@ -279,104 +280,108 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
             const canSubmit = ['pending', 'rejected'].includes(milestone.status);
             const isPendingReview = milestone.status === 'pending_review';
             return (
-            <div key={milestone.id} style={styles.card}>
-              <h3 style={styles.h3}>Request milestone release</h3>
-              <p style={styles.hint}>
-                {milestone.title} · {Number(milestone.release_percentage).toLocaleString()}% of
-                raised funds
-              </p>
-              <p style={{ ...styles.hint, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                Status: {milestoneStatusLabel(milestone.status)}
-              </p>
-              {milestone.status === 'rejected' && milestone.review_note && (
-                <div className="alert alert--error" style={{ marginBottom: '0.55rem' }}>
-                  Rejection reason: {milestone.review_note}
-                </div>
-              )}
-              {isPendingReview && (
-                <div className="alert alert--info" style={{ marginBottom: '0.55rem' }}>
-                  Your evidence is under review. You will be notified when the platform approves or
-                  rejects this milestone.
-                </div>
-              )}
-              {milestone.review_note && milestone.status !== 'rejected' && (
-                <div className="alert alert--info" style={{ marginBottom: '0.55rem' }}>
-                  {milestone.review_note}
-                </div>
-              )}
-              <label className="label-strong" htmlFor={`milestone-evidence-file-${milestone.id}`}>
-                Upload evidence file
-              </label>
-              <input
-                id={`milestone-evidence-file-${milestone.id}`}
-                type="file"
-                accept="image/*,.pdf,.doc,.docx,.txt"
-                disabled={!canSubmit || uploadingMilestoneId === milestone.id}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) uploadMilestoneFile(milestone.id, file);
-                  e.target.value = '';
-                }}
-                style={{ marginBottom: '0.65rem' }}
-              />
-              <label className="label-strong" htmlFor={`milestone-evidence-${milestone.id}`}>
-                Evidence URL
-              </label>
-              <input
-                id={`milestone-evidence-${milestone.id}`}
-                value={milestoneForms[milestone.id]?.evidence_url || ''}
-                onChange={(e) => setMilestoneField(milestone.id, 'evidence_url', e.target.value)}
-                placeholder="https:// or upload a file above"
-                disabled={!canSubmit}
-                style={{ marginBottom: '0.65rem' }}
-              />
-              <label className="label-strong" htmlFor={`milestone-description-${milestone.id}`}>
-                Evidence description
-              </label>
-              <textarea
-                id={`milestone-description-${milestone.id}`}
-                value={milestoneForms[milestone.id]?.evidence_description || ''}
-                onChange={(e) => setMilestoneField(milestone.id, 'evidence_description', e.target.value)}
-                placeholder="Describe what you delivered (demo link summary, deliverable notes, etc.)"
-                rows={3}
-                disabled={!canSubmit}
-                style={{ marginBottom: '0.65rem', resize: 'vertical', fontFamily: 'inherit' }}
-              />
-              <label className="label-strong" htmlFor={`milestone-destination-${milestone.id}`}>
-                Destination address
-              </label>
-              <input
-                id={`milestone-destination-${milestone.id}`}
-                value={milestoneForms[milestone.id]?.destination_key || ''}
-                onChange={(e) =>
-                  setMilestoneField(milestone.id, 'destination_key', e.target.value)
-                }
-                placeholder="G..."
-                disabled={!canSubmit}
-                style={{ marginBottom: '0.65rem' }}
-              />
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={
-                  !canSubmit ||
-                  busyId === `milestone-${milestone.id}` ||
-                  uploadingMilestoneId === milestone.id ||
-                  milestone.status === 'released'
-                }
-                onClick={() => requestMilestoneRelease(milestone.id)}
-                style={{ width: '100%' }}
-              >
-                {busyId === `milestone-${milestone.id}`
-                  ? 'Submitting…'
-                  : uploadingMilestoneId === milestone.id
-                  ? 'Uploading…'
-                  : isPendingReview
-                  ? 'Awaiting review'
-                  : 'Submit evidence for review'}
-              </button>
-            </div>
-          );
+              <div key={milestone.id} style={styles.card}>
+                <h3 style={styles.h3}>Request milestone release</h3>
+                <p style={styles.hint}>
+                  {milestone.title} · {Number(milestone.release_percentage).toLocaleString()}% of
+                  raised funds
+                </p>
+                <p
+                  style={{ ...styles.hint, fontWeight: 600, color: 'var(--color-text-secondary)' }}
+                >
+                  Status: {milestoneStatusLabel(milestone.status)}
+                </p>
+                {milestone.status === 'rejected' && milestone.review_note && (
+                  <div className="alert alert--error" style={{ marginBottom: '0.55rem' }}>
+                    Rejection reason: {milestone.review_note}
+                  </div>
+                )}
+                {isPendingReview && (
+                  <div className="alert alert--info" style={{ marginBottom: '0.55rem' }}>
+                    Your evidence is under review. You will be notified when the platform approves
+                    or rejects this milestone.
+                  </div>
+                )}
+                {milestone.review_note && milestone.status !== 'rejected' && (
+                  <div className="alert alert--info" style={{ marginBottom: '0.55rem' }}>
+                    {milestone.review_note}
+                  </div>
+                )}
+                <label className="label-strong" htmlFor={`milestone-evidence-file-${milestone.id}`}>
+                  Upload evidence file
+                </label>
+                <input
+                  id={`milestone-evidence-file-${milestone.id}`}
+                  type="file"
+                  accept="image/*,.pdf,.doc,.docx,.txt"
+                  disabled={!canSubmit || uploadingMilestoneId === milestone.id}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadMilestoneFile(milestone.id, file);
+                    e.target.value = '';
+                  }}
+                  style={{ marginBottom: '0.65rem' }}
+                />
+                <label className="label-strong" htmlFor={`milestone-evidence-${milestone.id}`}>
+                  Evidence URL
+                </label>
+                <input
+                  id={`milestone-evidence-${milestone.id}`}
+                  value={milestoneForms[milestone.id]?.evidence_url || ''}
+                  onChange={(e) => setMilestoneField(milestone.id, 'evidence_url', e.target.value)}
+                  placeholder="https:// or upload a file above"
+                  disabled={!canSubmit}
+                  style={{ marginBottom: '0.65rem' }}
+                />
+                <label className="label-strong" htmlFor={`milestone-description-${milestone.id}`}>
+                  Evidence description
+                </label>
+                <textarea
+                  id={`milestone-description-${milestone.id}`}
+                  value={milestoneForms[milestone.id]?.evidence_description || ''}
+                  onChange={(e) =>
+                    setMilestoneField(milestone.id, 'evidence_description', e.target.value)
+                  }
+                  placeholder="Describe what you delivered (demo link summary, deliverable notes, etc.)"
+                  rows={3}
+                  disabled={!canSubmit}
+                  style={{ marginBottom: '0.65rem', resize: 'vertical', fontFamily: 'inherit' }}
+                />
+                <label className="label-strong" htmlFor={`milestone-destination-${milestone.id}`}>
+                  Destination address
+                </label>
+                <input
+                  id={`milestone-destination-${milestone.id}`}
+                  value={milestoneForms[milestone.id]?.destination_key || ''}
+                  onChange={(e) =>
+                    setMilestoneField(milestone.id, 'destination_key', e.target.value)
+                  }
+                  placeholder="G..."
+                  disabled={!canSubmit}
+                  style={{ marginBottom: '0.65rem' }}
+                />
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={
+                    !canSubmit ||
+                    busyId === `milestone-${milestone.id}` ||
+                    uploadingMilestoneId === milestone.id ||
+                    milestone.status === 'released'
+                  }
+                  onClick={() => requestMilestoneRelease(milestone.id)}
+                  style={{ width: '100%' }}
+                >
+                  {busyId === `milestone-${milestone.id}`
+                    ? 'Submitting…'
+                    : uploadingMilestoneId === milestone.id
+                      ? 'Uploading…'
+                      : isPendingReview
+                        ? 'Awaiting review'
+                        : 'Submit evidence for review'}
+                </button>
+              </div>
+            );
           })}
         </div>
       )}
@@ -401,7 +406,13 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
             Destination must be a valid Stellar public key. Amount is in {campaign.asset_type}.
           </p>
           {liveBalance !== null && (
-            <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
+            <p
+              style={{
+                fontSize: '0.82rem',
+                color: 'var(--color-text-secondary)',
+                marginBottom: '0.5rem',
+              }}
+            >
               Available on-chain:{' '}
               <strong>
                 {liveBalance.toLocaleString()} {campaign.asset_type}
@@ -424,7 +435,13 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
             </p>
           )}
           {loadingBalance && (
-            <p style={{ fontSize: '0.82rem', color: 'var(--color-text-hint)', marginBottom: '0.5rem' }}>
+            <p
+              style={{
+                fontSize: '0.82rem',
+                color: 'var(--color-text-hint)',
+                marginBottom: '0.5rem',
+              }}
+            >
               Loading balance…
             </p>
           )}
@@ -474,8 +491,8 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
             {liveBalance !== null && Number(form.amount) > liveBalance
               ? 'Amount exceeds balance'
               : busyId === 'new'
-              ? 'Submitting…'
-              : 'Submit request'}
+                ? 'Submitting…'
+                : 'Submit request'}
           </button>
         </form>
       )}
@@ -515,7 +532,10 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
                   </div>
                 )}
                 {row.denial_reason && (
-                  <div className="alert alert--error" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
+                  <div
+                    className="alert alert--error"
+                    style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}
+                  >
                     {row.denial_reason}
                   </div>
                 )}
@@ -566,7 +586,7 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
                         runAction(
                           row.id,
                           () => api.cancelWithdrawal(row.id, { reason: 'Cancelled by creator' }),
-                          'Withdrawal cancelled',
+                          'Withdrawal cancelled'
                         )
                       }
                       style={{ fontSize: '0.8rem' }}
@@ -592,7 +612,7 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
                           runAction(
                             row.id,
                             () => api.approveWithdrawalCreator(row.id),
-                            'Withdrawal signed',
+                            'Withdrawal signed'
                           )
                         }
                         style={{ fontSize: '0.8rem' }}
@@ -648,7 +668,7 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
                                     api.rejectWithdrawal(row.id, {
                                       reason: rejectReason || 'Rejected by platform',
                                     }),
-                                  'Withdrawal rejected',
+                                  'Withdrawal rejected'
                                 );
                                 setRejectingId(null);
                                 setRejectReason('');
@@ -688,7 +708,7 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
                               runAction(
                                 row.id,
                                 () => api.approveWithdrawalPlatform(row.id),
-                                'Withdrawal approved',
+                                'Withdrawal approved'
                               )
                             }
                             style={{ fontSize: '0.8rem' }}
@@ -716,11 +736,25 @@ export default function WithdrawalsSection({ campaign, milestones = [], user, to
 }
 
 const styles = {
-  section: { marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--color-border-light)' },
+  section: {
+    marginTop: '2rem',
+    paddingTop: '1.5rem',
+    borderTop: '1px solid var(--color-border-light)',
+  },
   h2: { fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.5rem' },
   h3: { fontSize: '1rem', fontWeight: 700, marginBottom: '0.5rem' },
-  intro: { color: 'var(--color-text-secondary)', fontSize: '0.9rem', lineHeight: 1.55, marginBottom: '1rem' },
-  hint: { color: 'var(--color-text-hint)', fontSize: '0.82rem', lineHeight: 1.45, marginBottom: '0.65rem' },
+  intro: {
+    color: 'var(--color-text-secondary)',
+    fontSize: '0.9rem',
+    lineHeight: 1.55,
+    marginBottom: '1rem',
+  },
+  hint: {
+    color: 'var(--color-text-hint)',
+    fontSize: '0.82rem',
+    lineHeight: 1.45,
+    marginBottom: '0.65rem',
+  },
   card: {
     background: 'var(--color-bg)',
     border: '1px solid var(--color-border-light)',
@@ -730,7 +764,14 @@ const styles = {
     flexDirection: 'column',
     gap: '0.25rem',
   },
-  list: { listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.75rem', margin: 0, padding: 0 },
+  list: {
+    listStyle: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+    margin: 0,
+    padding: 0,
+  },
   row: {
     display: 'flex',
     flexDirection: 'column',

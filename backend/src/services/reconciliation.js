@@ -156,9 +156,6 @@ async function reconcileCampaignBalances() {
           diff: result.diff,
           stellar_transaction_id: result.stellar_transaction_id,
         });
-      } else if (result.updated) {
-        summary.updated += 1;
-        summary.results.push({ campaign_id: campaign.id, updated: true, dbBalance: result.dbBalance, liveBalance: result.liveBalance });
       }
     } catch (err) {
       summary.errors += 1;
@@ -170,9 +167,9 @@ async function reconcileCampaignBalances() {
     logger.info('[reconcile] Batch reconciliation finished', summary);
   }
 
-  return summary;
   summary.finished_at = new Date().toISOString();
   recordReconciliationRun(summary);
+  return summary;
 }
 
 async function reconcileSingleCampaign(campaignId) {

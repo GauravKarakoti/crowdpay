@@ -16,7 +16,12 @@ module.exports = [
   reactPlugin.configs.flat.recommended,
 
   // React Hooks flat config
-  reactHooksPlugin.configs.recommended,
+  {
+    plugins: {
+      'react-hooks': reactHooksPlugin,
+    },
+    rules: reactHooksPlugin.configs.recommended.rules,
+  },
 
   {
     files: ['**/*.{js,jsx}'],
@@ -27,7 +32,6 @@ module.exports = [
         ecmaFeatures: { jsx: true },
       },
       globals: {
-        // Browser globals
         window: 'readonly',
         document: 'readonly',
         navigator: 'readonly',
@@ -45,6 +49,11 @@ module.exports = [
         FormData: 'readonly',
         FileReader: 'readonly',
         Blob: 'readonly',
+        AbortController: 'readonly',
+        EventSource: 'readonly',
+        MessageEvent: 'readonly',
+        CustomEvent: 'readonly',
+        confirm: 'readonly',
       },
     },
     plugins: {

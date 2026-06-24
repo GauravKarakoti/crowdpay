@@ -265,6 +265,7 @@ async function buildUnsignedContributionPayment({
     );
   }
 
+  const tx = builder.build();
   return tx.toXDR();
 }
 
@@ -279,6 +280,7 @@ async function prepareSignedContributionPayment({
   memo,
 }) {
   const senderKeypair = Keypair.fromSecret(senderSecret);
+  const { feeAmount } = calcFee(amount);
   const unsignedXdr = await buildUnsignedContributionPayment({
     senderPublicKey: senderKeypair.publicKey(),
     destinationPublicKey,
@@ -351,6 +353,7 @@ async function buildUnsignedContributionPathPayment({
     );
   }
 
+  const tx = builder.build();
   return tx.toXDR();
 }
 
@@ -367,6 +370,7 @@ async function prepareSignedContributionPathPayment({
   memo,
 }) {
   const senderKeypair = Keypair.fromSecret(senderSecret);
+  const { feeAmount } = calcFee(destAmount);
   const unsignedXdr = await buildUnsignedContributionPathPayment({
     senderPublicKey: senderKeypair.publicKey(),
     destinationPublicKey,

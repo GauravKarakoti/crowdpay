@@ -8,7 +8,13 @@ import CampaignStatusBadge from '../components/CampaignStatusBadge';
 import DepositModal from '../components/DepositModal';
 import { stellarExpertTxUrl, stellarExpertAccountUrl } from '../config/stellar';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
 } from 'recharts';
 
 const TABS = [
@@ -35,7 +41,10 @@ function formatConversionRate(row) {
 function exportCSV(rows, filename) {
   if (!rows.length) return;
   const keys = Object.keys(rows[0]);
-  const csv = [keys.join(','), ...rows.map(r => keys.map(k => JSON.stringify(r[k] ?? '')).join(','))].join('\n');
+  const csv = [
+    keys.join(','),
+    ...rows.map((r) => keys.map((k) => JSON.stringify(r[k] ?? '')).join(',')),
+  ].join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = filename;
@@ -44,16 +53,26 @@ function exportCSV(rows, filename) {
 
 function MiniLineChart({ data, dataKey = 'total_amount', label = 'Amount' }) {
   if (!data || data.length === 0) {
-    return <p style={{ color: 'var(--color-text-hint)', fontSize: '0.9rem' }}>No contribution data yet.</p>;
+    return (
+      <p style={{ color: 'var(--color-text-hint)', fontSize: '0.9rem' }}>
+        No contribution data yet.
+      </p>
+    );
   }
   return (
     <ResponsiveContainer width="100%" height={180}>
       <LineChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-        <XAxis dataKey="day" tick={{ fontSize: 11 }} tickFormatter={d => d?.slice(5)} />
+        <XAxis dataKey="day" tick={{ fontSize: 11 }} tickFormatter={(d) => d?.slice(5)} />
         <YAxis tick={{ fontSize: 11 }} width={48} />
         <Tooltip formatter={(v) => [Number(v).toLocaleString(), label]} />
-        <Line type="monotone" dataKey={dataKey} stroke="var(--color-accent)" dot={false} strokeWidth={2} />
+        <Line
+          type="monotone"
+          dataKey={dataKey}
+          stroke="var(--color-accent)"
+          dot={false}
+          strokeWidth={2}
+        />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -64,10 +83,12 @@ function MilestoneFunnel({ campaignId }) {
   const [campaign, setCampaign] = useState(null);
 
   useEffect(() => {
-    Promise.all([
-      api.getMilestones(campaignId),
-      api.getCampaign(campaignId),
-    ]).then(([ms, c]) => { setMilestones(ms); setCampaign(c); }).catch(() => {});
+    Promise.all([api.getMilestones(campaignId), api.getCampaign(campaignId)])
+      .then(([ms, c]) => {
+        setMilestones(ms);
+        setCampaign(c);
+      })
+      .catch(() => {});
   }, [campaignId]);
 
   if (!milestones || milestones.length === 0) return null;
@@ -78,17 +99,33 @@ function MilestoneFunnel({ campaignId }) {
   return (
     <div style={{ marginTop: '0.75rem' }}>
       <strong style={{ fontSize: '0.9rem' }}>Milestone Funnel</strong>
-      {milestones.map(m => {
+      {milestones.map((m) => {
         const threshold = (Number(m.release_percentage) / 100) * target;
         const pct = Math.min(100, (raised / threshold) * 100);
         return (
           <div key={m.id} style={{ marginTop: '0.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
               <span>{m.title}</span>
-              <span style={{ color: 'var(--color-text-hint)' }}>{m.release_percentage}% · {pct.toFixed(0)}% funded</span>
+              <span style={{ color: 'var(--color-text-hint)' }}>
+                {m.release_percentage}% · {pct.toFixed(0)}% funded
+              </span>
             </div>
-            <div style={{ background: 'var(--color-surface)', borderRadius: 99, height: 6, marginTop: 3 }}>
-              <div style={{ width: `${pct}%`, height: 6, borderRadius: 99, background: m.status === 'released' ? '#22c55e' : 'var(--color-accent)' }} />
+            <div
+              style={{
+                background: 'var(--color-surface)',
+                borderRadius: 99,
+                height: 6,
+                marginTop: 3,
+              }}
+            >
+              <div
+                style={{
+                  width: `${pct}%`,
+                  height: 6,
+                  borderRadius: 99,
+                  background: m.status === 'released' ? '#22c55e' : 'var(--color-accent)',
+                }}
+              />
             </div>
           </div>
         );
@@ -101,7 +138,12 @@ export default function Dashboard() {
   const { user, token, ready, updateUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const activeTab = tabParam === 'contributions' ? 'contributions' : tabParam === 'referrals' ? 'referrals' : 'campaigns';
+  const activeTab =
+    tabParam === 'contributions'
+      ? 'contributions'
+      : tabParam === 'referrals'
+        ? 'referrals'
+        : 'campaigns';
 
   const [stats, setStats] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
@@ -122,9 +164,7 @@ export default function Dashboard() {
 
   const isCreator = user?.role === 'creator' || user?.role === 'admin';
 
-  const tabs = isCreator
-    ? [...TABS, { id: 'referrals', label: 'Referrals' }]
-    : TABS;
+  const tabs = isCreator ? [...TABS, { id: 'referrals', label: 'Referrals' }] : TABS;
 
   const kycRequired =
     user?.kyc_required_for_campaigns ??
@@ -135,7 +175,11 @@ export default function Dashboard() {
     setLoadingCampaigns(true);
     setError('');
 
-    api.getMyBalance().then((d) => setBalance(d.balance)).catch(() => {}).finally(() => setBalanceLoading(false));
+    api
+      .getMyBalance()
+      .then((d) => setBalance(d.balance))
+      .catch(() => {})
+      .finally(() => setBalanceLoading(false));
 
     const requests = [api.getMyContributions()];
     if (isCreator) {
@@ -151,7 +195,10 @@ export default function Dashboard() {
           setCampaigns(c);
           setContributions(contrib);
           // pre-fetch dashboard analytics for the analytics tab
-          api.getUserDashboardAnalytics().then(setDashAnalytics).catch(() => {});
+          api
+            .getUserDashboardAnalytics()
+            .then(setDashAnalytics)
+            .catch(() => {});
         } else {
           setContributions(results[0]);
         }
@@ -168,11 +215,11 @@ export default function Dashboard() {
     setCampaignAnalytics(null);
     setCampaignContributors(null);
     setAnalyticsLoading(true);
-    Promise.all([
-      api.getCampaignAnalytics(id),
-      api.getCampaignAnalyticsContributors(id),
-    ])
-      .then(([a, c]) => { setCampaignAnalytics(a); setCampaignContributors(c); })
+    Promise.all([api.getCampaignAnalytics(id), api.getCampaignAnalyticsContributors(id)])
+      .then(([a, c]) => {
+        setCampaignAnalytics(a);
+        setCampaignContributors(c);
+      })
       .catch(() => {})
       .finally(() => setAnalyticsLoading(false));
   }, []);
@@ -181,8 +228,11 @@ export default function Dashboard() {
     setReferralLoading(true);
     Promise.all(
       campaigns.map((c) =>
-        api.getReferralLeaderboard(c.id).then((rows) => [c.id, rows]).catch(() => [c.id, []]),
-      ),
+        api
+          .getReferralLeaderboard(c.id)
+          .then((rows) => [c.id, rows])
+          .catch(() => [c.id, []])
+      )
     )
       .then((results) => {
         const data = {};
@@ -211,11 +261,14 @@ export default function Dashboard() {
           if (status.status === 'verified' || status.status === 'rejected') {
             const me = await api.getMe();
             updateUser(me);
-            setSearchParams((params) => {
-              params.delete('kyc');
-              params.delete('reference');
-              return params;
-            }, { replace: true });
+            setSearchParams(
+              (params) => {
+                params.delete('kyc');
+                params.delete('reference');
+                return params;
+              },
+              { replace: true }
+            );
             break;
           }
         } catch {
@@ -253,17 +306,27 @@ export default function Dashboard() {
   if (!user) return <Navigate to="/login" replace />;
 
   const loading = activeTab === 'campaigns' ? loadingCampaigns : loadingContributions;
-  const visibleTabs = isCreator ? TABS : TABS.filter(t => t.id !== 'analytics');
+  const visibleTabs = isCreator ? TABS : TABS.filter((t) => t.id !== 'analytics');
 
   return (
     <main className="container" style={{ paddingTop: '2rem', paddingBottom: '3rem' }}>
       <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '1rem' }}>Dashboard</h1>
 
       <div className="campaign-card" style={{ marginBottom: '1rem', minHeight: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
           <div>
             <strong>Wallet balance</strong>
-            <div style={{ color: 'var(--color-text-hint)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
+            <div
+              style={{ color: 'var(--color-text-hint)', fontSize: '0.88rem', marginTop: '0.2rem' }}
+            >
               {balanceLoading
                 ? 'Loading…'
                 : balance
@@ -304,7 +367,6 @@ export default function Dashboard() {
           paddingBottom: '0.5rem',
         }}
       >
-        {visibleTabs.map((tab) => (
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -356,7 +418,13 @@ export default function Dashboard() {
                 >
                   <div>
                     <strong>Identity verification</strong>
-                    <div style={{ color: 'var(--color-text-hint)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
+                    <div
+                      style={{
+                        color: 'var(--color-text-hint)',
+                        fontSize: '0.88rem',
+                        marginTop: '0.2rem',
+                      }}
+                    >
                       Status: {user?.kyc_status || 'unverified'}
                       {user?.kyc_completed_at
                         ? ` • Completed ${new Date(user.kyc_completed_at).toLocaleDateString()}`
@@ -570,7 +638,16 @@ export default function Dashboard() {
         <section role="tabpanel" aria-labelledby="tab-analytics">
           {/* Dashboard-wide trend */}
           <div className="campaign-card" style={{ marginBottom: '1rem', minHeight: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
+                marginBottom: '0.75rem',
+              }}
+            >
               <strong>Contributions — last 30 days (all campaigns)</strong>
               {dashAnalytics?.recent_trend?.length > 0 && (
                 <button
@@ -583,18 +660,40 @@ export default function Dashboard() {
                 </button>
               )}
             </div>
-            <MiniLineChart data={dashAnalytics?.recent_trend} dataKey="total_amount" label="Amount" />
+            <MiniLineChart
+              data={dashAnalytics?.recent_trend}
+              dataKey="total_amount"
+              label="Amount"
+            />
             {dashAnalytics?.overview && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.5rem', marginTop: '0.75rem' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))',
+                  gap: '0.5rem',
+                  marginTop: '0.75rem',
+                }}
+              >
                 {[
                   ['Total raised', Number(dashAnalytics.overview.total_raised).toLocaleString()],
                   ['Contributions', dashAnalytics.overview.total_contributions],
                   ['Unique contributors', dashAnalytics.overview.unique_contributors],
-                  ['Avg contribution', Number(dashAnalytics.overview.avg_contribution).toLocaleString(undefined, { maximumFractionDigits: 2 })],
+                  [
+                    'Avg contribution',
+                    Number(dashAnalytics.overview.avg_contribution).toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    }),
+                  ],
                 ].map(([label, val]) => (
-                  <div key={label} className="campaign-card" style={{ minHeight: 'auto', padding: '0.6rem 0.75rem' }}>
+                  <div
+                    key={label}
+                    className="campaign-card"
+                    style={{ minHeight: 'auto', padding: '0.6rem 0.75rem' }}
+                  >
                     <strong style={{ fontSize: '1rem' }}>{val}</strong>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--color-text-hint)' }}>{label}</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--color-text-hint)' }}>
+                      {label}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -603,12 +702,23 @@ export default function Dashboard() {
 
           {/* Per-campaign drill-down */}
           <div className="campaign-card" style={{ minHeight: 'auto' }}>
-            <strong style={{ display: 'block', marginBottom: '0.6rem' }}>Per-campaign analytics</strong>
+            <strong style={{ display: 'block', marginBottom: '0.6rem' }}>
+              Per-campaign analytics
+            </strong>
             {campaigns.length === 0 ? (
-              <p style={{ color: 'var(--color-text-hint)', fontSize: '0.9rem' }}>No campaigns yet.</p>
+              <p style={{ color: 'var(--color-text-hint)', fontSize: '0.9rem' }}>
+                No campaigns yet.
+              </p>
             ) : (
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-                {campaigns.map(c => (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '0.5rem',
+                  flexWrap: 'wrap',
+                  marginBottom: '0.75rem',
+                }}
+              >
+                {campaigns.map((c) => (
                   <button
                     key={c.id}
                     type="button"
@@ -620,7 +730,8 @@ export default function Dashboard() {
                       cursor: 'pointer',
                       fontWeight: 600,
                       fontSize: '0.82rem',
-                      background: selectedCampaignId === c.id ? 'var(--color-accent)' : 'transparent',
+                      background:
+                        selectedCampaignId === c.id ? 'var(--color-accent)' : 'transparent',
                       color: selectedCampaignId === c.id ? '#fff' : 'var(--color-text-secondary)',
                     }}
                   >
@@ -630,37 +741,84 @@ export default function Dashboard() {
               </div>
             )}
 
-            {analyticsLoading && <p style={{ color: 'var(--color-text-hint)', fontSize: '0.9rem' }}>Loading…</p>}
+            {analyticsLoading && (
+              <p style={{ color: 'var(--color-text-hint)', fontSize: '0.9rem' }}>Loading…</p>
+            )}
 
             {campaignAnalytics && !analyticsLoading && (
               <>
                 {/* Summary row */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))',
+                    gap: '0.5rem',
+                    marginBottom: '0.75rem',
+                  }}
+                >
                   {[
-                    ['Total raised', `${Number(campaignAnalytics.campaign.raised_amount).toLocaleString()} ${campaignAnalytics.campaign.asset_type}`],
+                    [
+                      'Total raised',
+                      `${Number(campaignAnalytics.campaign.raised_amount).toLocaleString()} ${campaignAnalytics.campaign.asset_type}`,
+                    ],
                     ['Contributions', campaignAnalytics.summary.total_contributions],
                     ['Unique contributors', campaignAnalytics.summary.unique_contributors],
-                    ['Avg contribution', Number(campaignAnalytics.summary.avg_contribution).toLocaleString(undefined, { maximumFractionDigits: 2 })],
+                    [
+                      'Avg contribution',
+                      Number(campaignAnalytics.summary.avg_contribution).toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      }),
+                    ],
                   ].map(([label, val]) => (
-                    <div key={label} className="campaign-card" style={{ minHeight: 'auto', padding: '0.6rem 0.75rem' }}>
+                    <div
+                      key={label}
+                      className="campaign-card"
+                      style={{ minHeight: 'auto', padding: '0.6rem 0.75rem' }}
+                    >
                       <strong style={{ fontSize: '1rem' }}>{val}</strong>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--color-text-hint)' }}>{label}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--color-text-hint)' }}>
+                        {label}
+                      </div>
                     </div>
                   ))}
                 </div>
 
                 {/* Contributor stats card */}
                 {campaignContributors && (
-                  <div className="campaign-card" style={{ minHeight: 'auto', marginBottom: '0.75rem', padding: '0.75rem' }}>
+                  <div
+                    className="campaign-card"
+                    style={{ minHeight: 'auto', marginBottom: '0.75rem', padding: '0.75rem' }}
+                  >
                     <strong style={{ fontSize: '0.9rem' }}>Contributor stats</strong>
-                    <div style={{ marginTop: '0.4rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.88rem' }}>
-                      <span>First-time: <strong>{campaignContributors.first_time_contributors ?? 0}</strong></span>
-                      <span>Returning: <strong>{campaignContributors.repeat_contributors ?? 0}</strong></span>
+                    <div
+                      style={{
+                        marginTop: '0.4rem',
+                        display: 'flex',
+                        gap: '1.5rem',
+                        flexWrap: 'wrap',
+                        fontSize: '0.88rem',
+                      }}
+                    >
+                      <span>
+                        First-time:{' '}
+                        <strong>{campaignContributors.first_time_contributors ?? 0}</strong>
+                      </span>
+                      <span>
+                        Returning: <strong>{campaignContributors.repeat_contributors ?? 0}</strong>
+                      </span>
                       {campaignContributors.repeat_contributors > 0 && (
-                        <span>Return rate: <strong>
-                          {(((campaignContributors.repeat_contributors) /
-                            ((campaignContributors.repeat_contributors || 0) + (campaignContributors.first_time_contributors || 0))) * 100).toFixed(0)}%
-                        </strong></span>
+                        <span>
+                          Return rate:{' '}
+                          <strong>
+                            {(
+                              (campaignContributors.repeat_contributors /
+                                ((campaignContributors.repeat_contributors || 0) +
+                                  (campaignContributors.first_time_contributors || 0))) *
+                              100
+                            ).toFixed(0)}
+                            %
+                          </strong>
+                        </span>
                       )}
                     </div>
                     {campaignContributors.country_breakdown?.length > 0 && (
@@ -668,7 +826,13 @@ export default function Dashboard() {
                         <span style={{ color: 'var(--color-text-hint)' }}>Top country: </span>
                         <strong>{campaignContributors.country_breakdown[0].country}</strong>
                         <span style={{ color: 'var(--color-text-hint)' }}>
-                          {' '}({campaignContributors.country_breakdown.map(c => `${c.country} ${c.contributor_count}`).slice(0, 3).join(' · ')})
+                          {' '}
+                          (
+                          {campaignContributors.country_breakdown
+                            .map((c) => `${c.country} ${c.contributor_count}`)
+                            .slice(0, 3)
+                            .join(' · ')}
+                          )
                         </span>
                       </div>
                     )}
@@ -676,8 +840,14 @@ export default function Dashboard() {
                 )}
 
                 {/* Time-series chart */}
-                <strong style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.9rem' }}>Contributions over time</strong>
-                <MiniLineChart data={campaignAnalytics.daily_buckets} dataKey="total_amount" label="Amount" />
+                <strong style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.9rem' }}>
+                  Contributions over time
+                </strong>
+                <MiniLineChart
+                  data={campaignAnalytics.daily_buckets}
+                  dataKey="total_amount"
+                  label="Amount"
+                />
 
                 {/* Milestone funnel */}
                 <MilestoneFunnel campaignId={selectedCampaignId} />
@@ -688,14 +858,16 @@ export default function Dashboard() {
                     type="button"
                     className="btn-primary"
                     style={{ marginTop: '0.75rem', fontSize: '0.82rem', padding: '0.3rem 0.8rem' }}
-                    onClick={() => exportCSV(
-                      campaignAnalytics.daily_buckets.map(r => ({
-                        date: r.day,
-                        contributions: r.contribution_count,
-                        amount: r.total_amount,
-                      })),
-                      `campaign_${selectedCampaignId}_analytics.csv`
-                    )}
+                    onClick={() =>
+                      exportCSV(
+                        campaignAnalytics.daily_buckets.map((r) => ({
+                          date: r.day,
+                          contributions: r.contribution_count,
+                          amount: r.total_amount,
+                        })),
+                        `campaign_${selectedCampaignId}_analytics.csv`
+                      )
+                    }
                   >
                     Export CSV
                   </button>
@@ -703,6 +875,9 @@ export default function Dashboard() {
               </>
             )}
           </div>
+        </section>
+      )}
+
       {activeTab === 'referrals' && isCreator && (
         <section role="tabpanel" aria-labelledby="tab-referrals">
           {referralLoading ? (
@@ -755,24 +930,50 @@ export default function Dashboard() {
                             fontSize: '0.85rem',
                           }}
                         >
-                          <span><strong>{totalClicks}</strong> total clicks</span>
-                          <span><strong>{totalContributions}</strong> total conversions</span>
+                          <span>
+                            <strong>{totalClicks}</strong> total clicks
+                          </span>
+                          <span>
+                            <strong>{totalContributions}</strong> total conversions
+                          </span>
                         </div>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                        <table
+                          style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}
+                        >
                           <thead>
-                            <tr style={{ borderBottom: '2px solid var(--color-border)', textAlign: 'left' }}>
+                            <tr
+                              style={{
+                                borderBottom: '2px solid var(--color-border)',
+                                textAlign: 'left',
+                              }}
+                            >
                               <th style={{ padding: '0.35rem 0.5rem' }}>Referrer</th>
-                              <th style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>Clicks</th>
-                              <th style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>Conversions</th>
-                              <th style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>Rate</th>
+                              <th style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>
+                                Clicks
+                              </th>
+                              <th style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>
+                                Conversions
+                              </th>
+                              <th style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>
+                                Rate
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {refs.map((r, i) => (
-                              <tr key={r.referral_code} style={{ borderBottom: '1px solid var(--color-border-lighter)' }}>
-                                <td style={{ padding: '0.35rem 0.5rem', fontWeight: 600 }}>{r.referrer_name}</td>
-                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>{r.click_count}</td>
-                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>{r.contribution_count}</td>
+                              <tr
+                                key={r.referral_code}
+                                style={{ borderBottom: '1px solid var(--color-border-lighter)' }}
+                              >
+                                <td style={{ padding: '0.35rem 0.5rem', fontWeight: 600 }}>
+                                  {r.referrer_name}
+                                </td>
+                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>
+                                  {r.click_count}
+                                </td>
+                                <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>
+                                  {r.contribution_count}
+                                </td>
                                 <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>
                                   {r.click_count > 0
                                     ? `${((r.contribution_count / r.click_count) * 100).toFixed(0)}%`
@@ -796,7 +997,10 @@ export default function Dashboard() {
         <DepositModal
           onClose={() => setShowDepositModal(false)}
           onSuccess={() => {
-            api.getMyBalance().then((d) => setBalance(d.balance)).catch(() => {});
+            api
+              .getMyBalance()
+              .then((d) => setBalance(d.balance))
+              .catch(() => {});
           }}
         />
       )}
