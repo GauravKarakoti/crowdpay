@@ -121,7 +121,7 @@ export default function CampaignCard({ campaign, featured }) {
               borderLeft: '4px solid #fde047',
             }}
           >
-            "{campaign.featured_note}"
+            &quot;{campaign.featured_note}&quot;
           </p>
         )}
         <div

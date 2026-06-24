@@ -183,7 +183,9 @@ async function logout() {
     try {
       const data = JSON.parse(text);
       error = data.error || error;
-    } catch (err) {}
+    } catch (_err) {
+      /* ignore */
+    }
     throw new Error(error);
   }
 

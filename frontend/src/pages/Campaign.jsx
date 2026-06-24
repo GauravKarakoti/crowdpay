@@ -153,6 +153,7 @@ export default function Campaign() {
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [showEmbedSection, setShowEmbedSection] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [badgeCopied, setBadgeCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -819,7 +820,7 @@ export default function Campaign() {
             }}
           >
             This campaign did not reach its goal. You can refund all contributors — this will build
-            and sign a Stellar transaction that returns each contributor's exact amount.
+            and sign a Stellar transaction that returns each contributor&apos;s exact amount.
           </p>
           {refundError && (
             <p
@@ -2460,144 +2461,7 @@ const styles = {
     background: '#16a34a',
     animation: 'pulse 1.5s ease-in-out infinite',
   },
-  header: { marginBottom: '1.5rem' },
-  badgeRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    flexWrap: 'wrap',
-  },
-  asset: {
-    background: 'var(--color-accent-lightest)',
-    color: 'var(--color-accent)',
-    fontSize: '0.75rem',
-    fontWeight: 700,
-    padding: '2px 8px',
-    borderRadius: '99px',
-  },
-  title: {
-    fontSize: '1.8rem',
-    fontWeight: 800,
-    margin: '0.5rem 0',
-    color: 'var(--color-text-primary)',
-  },
-  creator: {
-    color: 'var(--color-text-hint)',
-    fontSize: '0.9rem',
-    marginBottom: '0.5rem',
-  },
-  desc: {
-    color: 'var(--color-text-secondary)',
-    fontSize: '1rem',
-    lineHeight: 1.6,
-  },
-  card: {
-    background: 'var(--color-bg)',
-    border: '1px solid var(--color-border-light)',
-    borderRadius: '10px',
-    padding: '1.5rem',
-    marginBottom: '1rem',
-  },
-  amounts: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    marginBottom: '1rem',
-  },
-  big: {
-    fontSize: '1.5rem',
-    fontWeight: 800,
-    color: 'var(--color-text-primary)',
-  },
-  small: { fontSize: '0.85rem', color: 'var(--color-text-secondary)' },
-  bar: {
-    background: 'var(--color-surface)',
-    borderRadius: '99px',
-    height: '8px',
-    marginBottom: '1.25rem',
-    overflow: 'hidden',
-  },
-  fill: {
-    background: 'var(--color-accent)',
-    height: '100%',
-    borderRadius: '99px',
-  },
-  cta: { width: '100%', padding: '0.85rem', fontSize: '1rem' },
-  walletInfo: {
-    background: 'var(--color-surface)',
-    borderRadius: '8px',
-    padding: '0.75rem 1rem',
-    marginBottom: '1.75rem',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.25rem',
-  },
-  walletLabel: {
-    fontSize: '0.75rem',
-    fontWeight: 600,
-    color: 'var(--color-text-secondary)',
-    textTransform: 'uppercase',
-  },
-  walletKey: {
-    fontSize: '0.8rem',
-    color: 'var(--color-text-hint)',
-    wordBreak: 'break-all',
-  },
-  detailCoverImage: {
-    width: '100%',
-    borderRadius: '14px',
-    marginBottom: '1.5rem',
-    objectFit: 'cover',
-    maxHeight: '360px',
-  },
-  sectionTitle: {
-    fontSize: '1.1rem',
-    fontWeight: 700,
-    marginBottom: '0.75rem',
-  },
-  list: { display: 'flex', flexDirection: 'column', gap: '0.5rem' },
-  row: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    background: 'var(--color-bg)',
-    border: '1px solid var(--color-border-lighter)',
-    borderRadius: '6px',
-    padding: '0.6rem 0.85rem',
-  },
-  sender: {
-    fontSize: '0.85rem',
-    color: 'var(--color-text-secondary)',
-    fontFamily: 'monospace',
-  },
-  amount: { fontSize: '0.85rem', fontWeight: 600, flexShrink: 0 },
-  convHint: {
-    fontSize: '0.72rem',
-    color: 'var(--color-text-secondary)',
-    marginTop: '0.15rem',
-  },
-  refundTag: {
-    marginTop: '0.45rem',
-    fontSize: '0.75rem',
-    color: 'var(--color-accent)',
-    fontWeight: 700,
-  },
-  liveIndicator: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '4px',
-    marginLeft: '0.5rem',
-    fontSize: '0.72rem',
-    fontWeight: 600,
-    color: 'var(--color-success-text)',
-    verticalAlign: 'middle',
-  },
-  liveDot: {
-    display: 'inline-block',
-    width: '7px',
-    height: '7px',
-    borderRadius: '50%',
-    background: 'var(--color-success-text)',
-    animation: 'pulse 1.5s ease-in-out infinite',
-  },
+
   embedCode: {
     background: 'var(--color-surface)',
     border: '1px solid var(--color-border-light)',

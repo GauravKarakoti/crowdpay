@@ -79,7 +79,9 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     try {
       await api.logout();
-    } catch (err) {}
+    } catch (_err) {
+      /* ignore */
+    }
     setUser(null);
     localStorage.removeItem('cp_user');
     setReady(true);

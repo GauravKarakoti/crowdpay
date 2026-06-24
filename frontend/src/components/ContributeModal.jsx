@@ -937,7 +937,7 @@ export default function ContributeModal({
                 }}
               />
               <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem' }}>
-                Your payment was submitted. We're waiting for it to be confirmed on the Stellar
+                Your payment was submitted. We&apos;re waiting for it to be confirmed on the Stellar
                 ledger, which usually takes 3–5 seconds.
               </p>
             </div>
