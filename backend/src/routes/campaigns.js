@@ -1126,16 +1126,13 @@ router.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
     // Validate ISO8601 format
     const deadlineDate = new Date(deadline);
     if (isNaN(deadlineDate.getTime())) {
-      return res.status(422).json({ error: 'Deadline must be a valid date' });
+      return res.status(422).json({ error: 'Deadline must be a valid ISO 8601 date' });
     }
 
-    // Check deadline is not in the past
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    deadlineDate.setHours(0, 0, 0, 0);
-
-    if (deadlineDate < today) {
-      return res.status(422).json({ error: 'Deadline cannot be in the past' });
+    // Check deadline is not in the past (UTC comparison)
+    const now = new Date();
+    if (deadlineDate.getTime() <= now.getTime()) {
+      return res.status(422).json({ error: 'Deadline must be in the future (UTC)' });
     }
 
     updates.deadline = deadline;
