@@ -159,9 +159,14 @@ app.get('/health', async (_, res) => {
     res.status(503).json({ status: 'error', error: err.message });
   }
 });
-app.get('/api/config', (_, res) =>
-  res.json({ platform_fee_bps: parseInt(process.env.PLATFORM_FEE_BPS || '0', 10) })
-);
+app.get('/api/config', (_, res) => {
+  const { USDC } = require('./config/stellar');
+  res.json({
+    platform_fee_bps: parseInt(process.env.PLATFORM_FEE_BPS || '0', 10),
+    usdc_issuer: USDC.issuer || process.env.USDC_ISSUER || 'GBBD472Q6TDQNCA24G2UG4M326T7J62TK2TYWNDSTXT5VBN2O4OXCT3U',
+  });
+});
+
 
 // Public platform stats — used on the hero / landing section.
 // Cached for 60 s; invalidated by ledgerMonitor after each indexed contribution.

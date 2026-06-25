@@ -85,11 +85,15 @@ export default function ContributeModal({
   const [phase, setPhase] = useState('form');
   const [result, setResult] = useState(null);
   const [feeBps, setFeeBps] = useState(0);
+  const [usdcIssuer, setUsdcIssuer] = useState('');
 
   useEffect(() => {
     api
       .getPlatformConfig()
-      .then((cfg) => setFeeBps(cfg.platform_fee_bps || 0))
+      .then((cfg) => {
+        setFeeBps(cfg.platform_fee_bps || 0);
+        setUsdcIssuer(cfg.usdc_issuer || '');
+      })
       .catch(() => {});
   }, []);
   const [freighterAvailable, setFreighterAvailable] = useState(false);
@@ -108,6 +112,21 @@ export default function ContributeModal({
   const destAmount = amount.trim();
   const matchedTier = matchTier(tiers, destAmount);
   const [unlockedTier, setUnlockedTier] = useState(null);
+
+  const activeUsdcIssuer = usdcIssuer || import.meta.env.VITE_USDC_ISSUER || (
+    (import.meta.env.VITE_STELLAR_NETWORK || 'testnet') === 'public' || (import.meta.env.VITE_STELLAR_NETWORK || 'testnet') === 'mainnet'
+      ? 'GA5ZSEQAQM22CZF22KKOW3QJ24JEVH6KUC4WNZEX7S4EBAC6VHMCDVTY'
+      : 'GBBD472Q6TDQNCA24G2UG4M326T7J62TK2TYWNDSTXT5VBN2O4OXCT3U'
+  );
+
+  const getStellarPayUri = () => {
+    if (!destAmount || isNaN(parseFloat(destAmount))) return '#';
+    let uri = `stellar:pay?destination=${encodeURIComponent(campaign.wallet_public_key)}&amount=${encodeURIComponent(destAmount)}`;
+    if (sendAsset !== 'XLM') {
+      uri += `&asset_code=${encodeURIComponent(sendAsset)}&asset_issuer=${encodeURIComponent(activeUsdcIssuer)}`;
+    }
+    return uri;
+  };
 
   const kycRequired =
     user?.kyc_required_for_campaigns ??
@@ -572,23 +591,23 @@ export default function ContributeModal({
                       <div className="asset-picker__hint">Uses your existing custodial balance</div>
                     </label>
                   )}
-                  {(freighterAvailable || guestFreighterMode) && (
-                    <label
-                      className={`asset-picker__option${paymentMethod === 'freighter' ? ' asset-picker__option--selected' : ''}`}
-                    >
-                      <input
-                        type="radio"
-                        name="payment_method"
-                        value="freighter"
-                        checked={paymentMethod === 'freighter'}
-                        onChange={() => setPaymentMethod('freighter')}
-                      />
-                      <div className="asset-picker__code">Pay with Freighter</div>
-                      <div className="asset-picker__hint">
-                        You sign in-browser; CrowdPay never sees your key
-                      </div>
-                    </label>
-                  )}
+                  <label
+                    className={`asset-picker__option${paymentMethod === 'freighter' ? ' asset-picker__option--selected' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      value="freighter"
+                      checked={paymentMethod === 'freighter'}
+                      onChange={() => setPaymentMethod('freighter')}
+                    />
+                    <div className="asset-picker__code">Pay with Freighter</div>
+                    <div className="asset-picker__hint">
+                      {freighterAvailable
+                        ? 'You sign in-browser; CrowdPay never sees your key'
+                        : 'Freighter not detected — see alternatives below'}
+                    </div>
+                  </label>
                   {anchorInfo.anchors.some((anchor) => anchor.available) && (
                     <label
                       className={`asset-picker__option${paymentMethod === 'anchor' ? ' asset-picker__option--selected' : ''}`}
@@ -608,21 +627,118 @@ export default function ContributeModal({
                     </label>
                   )}
                 </div>
-                {freighterChecked &&
-                  !freighterAvailable &&
-                  (paymentMethod === 'freighter' || guestFreighterMode) && (
-                    <span id="contrib-wallet-help" style={styles.help}>
-                      Freighter extension not detected.{' '}
+
+                {/* Fallback panel — shown when Freighter tab is selected but extension absent */}
+                {freighterChecked && !freighterAvailable && paymentMethod === 'freighter' && (
+                  <div
+                    id="contrib-wallet-fallback"
+                    style={{
+                      marginTop: '1rem',
+                      padding: '1rem',
+                      borderRadius: '0.5rem',
+                      border: '1px solid var(--color-border, #334155)',
+                      background: 'var(--color-surface-alt, rgba(255,255,255,0.03))',
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: '0 0 0.75rem',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        color: 'var(--color-text, inherit)',
+                      }}
+                    >
+                      🔌 Freighter extension not detected
+                    </p>
+                    <p style={{ margin: '0 0 1rem', fontSize: '0.82rem', color: 'var(--color-text-hint, #94a3b8)', lineHeight: 1.5 }}>
+                      You have three options to contribute:
+                    </p>
+
+                    {/* Option 1 — mobile deep-link */}
+                    <div style={{ marginBottom: '0.85rem' }}>
+                      <p style={{ margin: '0 0 0.35rem', fontWeight: 600, fontSize: '0.82rem' }}>
+                        📱 Open in a Stellar wallet app
+                      </p>
+                      <p style={{ margin: '0 0 0.5rem', fontSize: '0.78rem', color: 'var(--color-text-hint, #94a3b8)' }}>
+                        Works with LOBSTR, Solar Wallet, and any SEP-0007 compatible app. Enter an amount above first.
+                      </p>
                       <a
+                        id="contrib-stellar-pay-link"
+                        href={getStellarPayUri()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-disabled={!destAmount || isNaN(parseFloat(destAmount))}
+                        style={{
+                          display: 'inline-block',
+                          padding: '0.45rem 0.85rem',
+                          borderRadius: '0.375rem',
+                          background: 'var(--color-primary, #6366f1)',
+                          color: '#fff',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          textDecoration: 'none',
+                          opacity: !destAmount || isNaN(parseFloat(destAmount)) ? 0.45 : 1,
+                          pointerEvents: !destAmount || isNaN(parseFloat(destAmount)) ? 'none' : 'auto',
+                        }}
+                      >
+                        Open in wallet app →
+                      </a>
+                    </div>
+
+                    {/* Option 2 — custodial */}
+                    {!guestFreighterMode && (
+                      <div style={{ marginBottom: '0.85rem' }}>
+                        <p style={{ margin: '0 0 0.35rem', fontWeight: 600, fontSize: '0.82rem' }}>
+                          💳 Use your CrowdPay custodial wallet
+                        </p>
+                        <p style={{ margin: '0 0 0.5rem', fontSize: '0.78rem', color: 'var(--color-text-hint, #94a3b8)' }}>
+                          Contribute using your on-platform balance — no browser extension needed.
+                        </p>
+                        <button
+                          id="contrib-switch-custodial"
+                          type="button"
+                          style={{
+                            padding: '0.45rem 0.85rem',
+                            borderRadius: '0.375rem',
+                            border: '1px solid var(--color-primary, #6366f1)',
+                            background: 'transparent',
+                            color: 'var(--color-primary, #6366f1)',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setPaymentMethod('custodial')}
+                        >
+                          Switch to custodial
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Option 3 — get Freighter */}
+                    <div>
+                      <p style={{ margin: '0 0 0.35rem', fontWeight: 600, fontSize: '0.82rem' }}>
+                        🦊 Install Freighter
+                      </p>
+                      <p style={{ margin: '0 0 0.5rem', fontSize: '0.78rem', color: 'var(--color-text-hint, #94a3b8)' }}>
+                        The free Freighter browser extension lets you sign Stellar transactions from any wallet.
+                      </p>
+                      <a
+                        id="contrib-get-freighter-link"
                         href="https://www.freighter.app/"
                         target="_blank"
                         rel="noopener noreferrer"
+                        style={{
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          color: 'var(--color-primary, #6366f1)',
+                          textDecoration: 'underline',
+                        }}
                       >
-                        Install Freighter
-                      </a>{' '}
-                      to contribute from your own Stellar wallet.
-                    </span>
-                  )}
+                        Get Freighter →
+                      </a>
+                    </div>
+                  </div>
+                )}
               </fieldset>
 
               {paymentMethod === 'anchor' ? (

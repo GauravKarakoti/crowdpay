@@ -756,20 +756,10 @@ export default function Campaign() {
   }
 
   async function handleFreighterContribute() {
-    try {
-      const connected = await isConnected()
-        .then((r) => r?.isConnected ?? r)
-        .catch(() => false);
-      if (!connected) {
-        window.open('https://www.freighter.app/', '_blank', 'noopener,noreferrer');
-        return;
-      }
-      setFreighterGuestMode(true);
-      setShowModal(true);
-    } catch {
-      window.open('https://www.freighter.app/', '_blank', 'noopener,noreferrer');
-    }
+    setFreighterGuestMode(true);
+    setShowModal(true);
   }
+
 
   async function submitUpdate(e) {
     e.preventDefault();
