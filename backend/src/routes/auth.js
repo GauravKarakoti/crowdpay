@@ -257,7 +257,7 @@ router.post('/register', registerLimiter, registerValidation, validateRequest, a
   let publicKey;
   let encryptedSecret = null;
   let secret = null;
-  let walletType = req.body.wallet_type || 'custodial';
+  const walletType = req.body.wallet_type || 'custodial';
 
   if (walletType === 'freighter') {
     publicKey = req.body.wallet_public_key;

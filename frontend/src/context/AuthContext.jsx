@@ -80,7 +80,7 @@ export function AuthProvider({ children }) {
     try {
       await api.logout();
     } catch (_err) {
-      // Silently ignore logout errors
+      /* ignore */
     }
     setUser(null);
     localStorage.removeItem('cp_user');
