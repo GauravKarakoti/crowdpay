@@ -53,7 +53,6 @@ export default function CreateCampaign() {
   const { user, ready, updateUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const token = localStorage.getItem('cp_token');
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     title: location.state?.prefill?.title || '',
