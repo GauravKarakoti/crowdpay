@@ -1143,11 +1143,12 @@ export default function Campaign() {
           }}
           onClick={() => {
             const shareUrl = referralUrl || window.location.href;
-            const text = encodeURIComponent(
-              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`
-            );
+            const pct = Math.min(100, (campaign.raised_amount / campaign.target_amount) * 100).toFixed(1);
+            const daysLeft = Math.max(0, Math.ceil((new Date(campaign.end_date) - new Date()) / (1000 * 60 * 60 * 24)));
+            const text = encodeURIComponent(`Back ${campaign.title} on CrowdPay — ${pct}% funded, ${daysLeft} days left. Built on Stellar. ${shareUrl} #Stellar #CrowdPay`);
             window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
           }}
+          aria-label="Share on X"
         >
           Share on X
         </button>
@@ -1164,13 +1165,33 @@ export default function Campaign() {
           }}
           onClick={() => {
             const shareUrl = referralUrl || window.location.href;
-            const text = encodeURIComponent(
-              `I just backed ${campaign.title} on CrowdPay — ${pct}% funded with ${campaign.contributor_count || 0} backers. Join me: ${shareUrl}`
-            );
+            const pct = Math.min(100, (campaign.raised_amount / campaign.target_amount) * 100).toFixed(1);
+            const text = encodeURIComponent(`Hey! Check out this campaign on CrowdPay: ${campaign.title}. They're ${pct}% funded and need your help. ${shareUrl}`);
             window.open(`https://wa.me/?text=${text}`, '_blank');
           }}
+          aria-label="Share on WhatsApp"
         >
           WhatsApp
+        </button>
+        <button
+          type="button"
+          className="btn-secondary"
+          style={{
+            flex: 1,
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+          }}
+          onClick={() => {
+            const shareUrl = referralUrl || window.location.href;
+            const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+            window.open(linkedInUrl, '_blank');
+          }}
+          aria-label="Share on LinkedIn"
+        >
+          LinkedIn
         </button>
         <div style={{ position: 'relative', flex: 1 }}>
           <button
